@@ -11,6 +11,7 @@ are serialized by the lock + busy_timeout.
 
 from __future__ import annotations
 
+import atexit
 import logging
 import os
 import shutil
@@ -59,10 +60,20 @@ class DatabaseManager:
         )
         self._connection.row_factory = sqlite3.Row
 
-        # Enable WAL mode, foreign keys, and busy timeout
+        # Enable WAL mode, foreign keys, busy timeout, and crash-safety pragmas
         self._connection.execute("PRAGMA journal_mode=WAL")
         self._connection.execute("PRAGMA foreign_keys=ON")
         self._connection.execute("PRAGMA busy_timeout=5000")
+        # FULL synchronous: fsync after every write — survives OS crash or force-kill
+        self._connection.execute("PRAGMA synchronous=FULL")
+        # Auto-checkpoint at 200 pages (default 1000) — keeps WAL small,
+        # reduces replay time on recovery, and limits corruption surface area
+        self._connection.execute("PRAGMA wal_autocheckpoint=200")
+
+        # Register a lightweight checkpoint as atexit so Ctrl+C and normal
+        # Python exits in dev workflows also close the DB gracefully.
+        # Has no effect if close() already ran (connection will be None).
+        atexit.register(self.close)
 
         # Set file permissions (Unix only)
         self._set_file_permissions()
@@ -156,8 +167,12 @@ class DatabaseManager:
         """Close the database connection."""
         if self._connection is not None:
             try:
-                # Checkpoint WAL to main database file before closing
-                self._connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                # PASSIVE checkpoint: only writes WAL frames not held by any
+                # reader. Safe to interrupt — WAL remains intact if killed
+                # mid-checkpoint, and SQLite replays it on next open.
+                # Do NOT use TRUNCATE here: a force-kill during TRUNCATE
+                # leaves partially-written main DB pages with the WAL gone.
+                self._connection.execute("PRAGMA wal_checkpoint(PASSIVE)")
             except Exception:
                 pass
             self._connection.close()
