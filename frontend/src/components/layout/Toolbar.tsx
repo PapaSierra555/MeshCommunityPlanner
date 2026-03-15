@@ -29,6 +29,7 @@ interface ToolbarProps {
   onImportCSV?: () => void;
   onImportJSON?: () => void;
   onImportFromMap?: () => void;
+  isInternetOnline?: boolean | null;
   onImportSignal?: () => void;
   onExportKML?: () => void;
   onExportGeoJSON?: () => void;
@@ -90,6 +91,7 @@ export function Toolbar({
   onImportCSV,
   onImportJSON,
   onImportFromMap,
+  isInternetOnline = null,
   onImportSignal,
   onExportKML,
   onExportGeoJSON,
@@ -362,10 +364,17 @@ export function Toolbar({
                     title="Import node locations from a JSON file with a layers array (name, latitude, longitude, antenna_height_a)">
                     Import Nodes (JSON)
                   </button>
-                  <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
-                    onClick={() => hasPlan && handleItemClick(onImportFromMap)}
-                    title="Import nodes from online mesh network maps (MeshCore Map, rmap.world)">
-                    Import Nodes (Internet)
+                  <button
+                    className={`toolbar-dropdown-item${(!hasPlan || isInternetOnline === false) ? ' disabled' : ''}`}
+                    type="button"
+                    onClick={() => hasPlan && isInternetOnline !== false && handleItemClick(onImportFromMap)}
+                    title={
+                      isInternetOnline === false
+                        ? 'No internet connection — cannot reach MeshCore Map'
+                        : 'Import nodes from online mesh network maps (MeshCore Map)'
+                    }
+                  >
+                    Import Nodes (Internet){isInternetOnline === false ? ' (offline)' : ''}
                   </button>
                   <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
                     onClick={() => hasPlan && handleItemClick(onImportSignal)}

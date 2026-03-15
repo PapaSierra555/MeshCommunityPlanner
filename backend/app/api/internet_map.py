@@ -107,6 +107,21 @@ def _normalize_meshcore_nodes(raw_nodes: list[Any]) -> list[dict[str, Any]]:
     return normalized
 
 
+@router.get("/import/internet-map/ping")
+async def ping_internet_map() -> dict[str, bool]:
+    """Fast connectivity probe — HEAD request to map.meshcore.dev with a 3s timeout.
+
+    Returns:
+        JSON: {"online": true} if reachable, {"online": false} otherwise.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            await client.head("https://map.meshcore.dev", follow_redirects=True)
+        return {"online": True}
+    except Exception:
+        return {"online": False}
+
+
 @router.get("/import/internet-map")
 async def fetch_internet_map_nodes(
     source: str = Query(default="meshcore", description="Map source: 'meshcore'"),

@@ -320,6 +320,7 @@ export function AppLayout() {
   const [showPlacementSuggest, setShowPlacementSuggest] = useState(false);
   const [showPDFReport, setShowPDFReport] = useState(false);
   const [internetMapImportOpen, setInternetMapImportOpen] = useState(false);
+  const [isInternetOnline, setIsInternetOnline] = useState<boolean | null>(null);
   const [signalImportOpen, setSignalImportOpen] = useState(false);
   const [bulkCoverageEnv, setBulkCoverageEnv] = useState('');
   const [envWarningDialog, setEnvWarningDialog] = useState<{
@@ -428,6 +429,16 @@ export function AppLayout() {
   }, [api]);
 
   useEffect(() => { loadCatalogData(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Probe internet connectivity once on startup — result gates the Import Nodes (Internet) menu item
+  useEffect(() => {
+    const token = (window as any).__MESH_PLANNER_AUTH__;
+    const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+    fetch('/api/import/internet-map/ping', { headers })
+      .then((r) => r.json())
+      .then((data) => setIsInternetOnline(!!data.online))
+      .catch(() => setIsInternetOnline(false));
+  }, []);
 
   const handleCatalogClose = useCallback(() => {
     setCatalogModalOpen(false);
@@ -2682,6 +2693,7 @@ export function AppLayout() {
         onImportCSV={handleImportCSV}
         onImportJSON={handleImportJSON}
         onImportFromMap={() => setInternetMapImportOpen(true)}
+        isInternetOnline={isInternetOnline}
         onImportSignal={() => setSignalImportOpen(true)}
         onExportKML={handleExportKML}
         onExportGeoJSON={handleExportGeoJSON}

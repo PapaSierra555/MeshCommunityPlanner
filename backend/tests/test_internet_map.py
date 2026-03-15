@@ -431,3 +431,48 @@ class TestUpstreamErrors:
 
         assert resp.status_code == 503
         assert "unreadable" in resp.json()["detail"].lower()
+
+
+class TestPingEndpoint:
+    """Tests for GET /api/import/internet-map/ping connectivity probe."""
+
+    def test_ping_returns_online_true_when_reachable(self, client):
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.head = AsyncMock(return_value=MagicMock(status_code=200))
+            mock_client_cls.return_value = mock_client
+
+            resp = client.get("/api/import/internet-map/ping", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert resp.json() == {"online": True}
+
+    def test_ping_returns_online_false_on_timeout(self, client):
+        import httpx
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.head = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
+            mock_client_cls.return_value = mock_client
+
+            resp = client.get("/api/import/internet-map/ping", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert resp.json() == {"online": False}
+
+    def test_ping_returns_online_false_on_connection_error(self, client):
+        import httpx
+        with patch("httpx.AsyncClient") as mock_client_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.head = AsyncMock(side_effect=httpx.ConnectError("no route"))
+            mock_client_cls.return_value = mock_client
+
+            resp = client.get("/api/import/internet-map/ping", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert resp.json() == {"online": False}
