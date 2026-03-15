@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getAPIClient } from '../../services/api';
 import { usePlanStore } from '../../stores/planStore';
+import meshcoreIcon from '../../assets/icons/meshcore.svg';
 import './InternetMapImportModal.css';
 
 /** Read the injected auth token (set by the backend at startup). */
@@ -208,9 +209,12 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
         {/* Header */}
         <div className="imim-header">
           <div>
-            <h2 className="imim-title">Import Nodes from Internet Map</h2>
+            <h2 className="imim-title">
+              <img src={meshcoreIcon} className="imim-title-icon" alt="" aria-hidden="true" />
+              Import Nodes — MeshCore Map
+            </h2>
             <p className="imim-subtitle">
-              Fetch live node positions from public mesh network maps
+              Fetch live node positions from map.meshcore.dev
             </p>
           </div>
           <button className="imim-close" type="button" onClick={onClose} title="Close">&times;</button>
@@ -330,6 +334,8 @@ interface PhasePreviewProps {
   nodeIndexOf: (n: MapNode) => number;
 }
 
+const BULK_IMPORT_WARN_THRESHOLD = 5;
+
 function PhasePreview({
   allNodes,
   filteredNodes,
@@ -346,6 +352,24 @@ function PhasePreview({
   nodeIndexOf,
 }: PhasePreviewProps) {
   const selectedCount = selected.size;
+  const [confirmPending, setConfirmPending] = useState(false);
+
+  const handleImportClick = useCallback(() => {
+    if (selectedCount > BULK_IMPORT_WARN_THRESHOLD) {
+      setConfirmPending(true);
+    } else {
+      onImport();
+    }
+  }, [selectedCount, onImport]);
+
+  const handleConfirm = useCallback(() => {
+    setConfirmPending(false);
+    onImport();
+  }, [onImport]);
+
+  const handleCancelConfirm = useCallback(() => {
+    setConfirmPending(false);
+  }, []);
 
   return (
     <div className="imim-phase-preview">
@@ -424,30 +448,44 @@ function PhasePreview({
         </div>
       )}
 
+      {/* Bulk import confirmation warning */}
+      {confirmPending && (
+        <div className="imim-bulk-warn" role="alert">
+          <strong>Importing {selectedCount} nodes</strong>
+          <p>That's a large number of nodes. They will all be added to your current plan. Are you sure?</p>
+          <div className="imim-bulk-warn-actions">
+            <button className="imim-btn imim-btn--ghost" type="button" onClick={handleCancelConfirm}>Cancel</button>
+            <button className="imim-btn imim-btn--primary" type="button" onClick={handleConfirm}>Import {selectedCount} Nodes</button>
+          </div>
+        </div>
+      )}
+
       {/* Action buttons */}
-      <div className="imim-actions imim-actions--split">
-        <button
-          className="imim-btn imim-btn--ghost"
-          type="button"
-          onClick={onBack}
-          disabled={importing}
-        >
-          &larr; Back
-        </button>
-        <button
-          className="imim-btn imim-btn--primary"
-          type="button"
-          onClick={onImport}
-          disabled={importing || selectedCount === 0}
-          title={selectedCount === 0 ? 'Select at least one node to import' : `Import ${selectedCount} selected node(s)`}
-        >
-          {importing ? (
-            <><span className="imim-spinner" aria-hidden="true" /> Importing&hellip;</>
-          ) : (
-            `Import ${selectedCount} Selected Node${selectedCount !== 1 ? 's' : ''}`
-          )}
-        </button>
-      </div>
+      {!confirmPending && (
+        <div className="imim-actions imim-actions--split">
+          <button
+            className="imim-btn imim-btn--ghost"
+            type="button"
+            onClick={onBack}
+            disabled={importing}
+          >
+            &larr; Back
+          </button>
+          <button
+            className="imim-btn imim-btn--primary"
+            type="button"
+            onClick={handleImportClick}
+            disabled={importing || selectedCount === 0}
+            title={selectedCount === 0 ? 'Select at least one node to import' : `Import ${selectedCount} selected node(s)`}
+          >
+            {importing ? (
+              <><span className="imim-spinner" aria-hidden="true" /> Importing&hellip;</>
+            ) : (
+              `Import ${selectedCount} Selected Node${selectedCount !== 1 ? 's' : ''}`
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

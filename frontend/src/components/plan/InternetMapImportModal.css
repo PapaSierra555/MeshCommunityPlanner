@@ -45,6 +45,18 @@
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.imim-title-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  opacity: 0.85;
+  flex-shrink: 0;
 }
 
 .imim-subtitle {
@@ -354,7 +366,7 @@
 }
 
 .imim-table td {
-  padding: 0.4rem 0.65rem;
+  padding: 0.3rem 0.65rem;
   border-bottom: 1px solid rgba(52, 73, 94, 0.4);
   vertical-align: middle;
 }
@@ -408,14 +420,17 @@
 .imim-checkbox {
   -webkit-appearance: none;
   appearance: none;
-  width: 13px;
-  height: 13px;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
   border: 1.5px solid #5d6d7e;
-  border-radius: 2px;
+  border-radius: 3px;
   background-color: #2c3e50;
   cursor: pointer;
   position: relative;
   vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .imim-checkbox:checked {
@@ -426,13 +441,49 @@
 .imim-checkbox:checked::after {
   content: '';
   position: absolute;
-  left: 2px;
-  top: 0px;
-  width: 5px;
-  height: 8px;
+  left: 4px;
+  top: 1px;
+  width: 6px;
+  height: 10px;
   border: solid #fff;
-  border-width: 0 1.5px 1.5px 0;
+  border-width: 0 2px 2px 0;
   transform: rotate(45deg);
+}
+
+/* Override global 44px WCAG touch target for table checkboxes —
+   rows are large enough to provide adequate touch area. */
+.imim-table input[type="checkbox"] {
+  min-width: 18px;
+  min-height: 18px;
+}
+
+/* ---- Bulk import warning ---- */
+
+.imim-bulk-warn {
+  background: rgba(230, 126, 34, 0.12);
+  border: 1px solid rgba(230, 126, 34, 0.5);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  color: #e67e22;
+}
+
+.imim-bulk-warn strong {
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 0.3rem;
+}
+
+.imim-bulk-warn p {
+  margin: 0 0 0.65rem;
+  font-size: 0.82rem;
+  color: #f0a060;
+  line-height: 1.4;
+}
+
+.imim-bulk-warn-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
 }
 
 /* ---- Note ---- */

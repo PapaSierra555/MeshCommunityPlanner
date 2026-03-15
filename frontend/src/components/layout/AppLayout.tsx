@@ -292,6 +292,7 @@ export function AppLayout() {
   const [rememberCoverageSettings, setRememberCoverageSettings] = useState(!!savedCoverageSettings);
   const [lastRunCoverageSettings, setLastRunCoverageSettings] = useState<{ env: string; maxRadiusKm: number } | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const losCancelRef = useRef(false);
   const [checkedPlanIds, setCheckedPlanIds] = useState<Set<string>>(new Set());
   const [descExpanded, setDescExpanded] = useState(false);
   const [showLinkReport, setShowLinkReport] = useState(false);
@@ -1572,6 +1573,18 @@ export function AppLayout() {
 
   // ---- Tool Actions ----
 
+  /** Haversine distance in metres between two lat/lon points. */
+  const haversineM = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }, []);
+
+  /** Maximum realistic LoRa LOS distance (300 km is already very generous). */
+  const LOS_MAX_DISTANCE_M = 300_000;
+
   const handleLineOfSight = useCallback(async () => {
     if (!currentPlan) { setErrorMsg('Open a plan first.'); return; }
     if (selectedNodeIds.length < 2) {
@@ -1579,19 +1592,39 @@ export function AppLayout() {
       return;
     }
 
+    const selectedNodes = nodes.filter((n) => selectedNodeIds.includes(String(n.id)));
+
+    // Pre-flight distance check — reject pairs that exceed LoRa's realistic range
+    for (let i = 0; i < selectedNodes.length; i++) {
+      for (let j = i + 1; j < selectedNodes.length; j++) {
+        const nodeA = selectedNodes[i];
+        const nodeB = selectedNodes[j];
+        const distM = haversineM(nodeA.latitude, nodeA.longitude, nodeB.latitude, nodeB.longitude);
+        if (distM > LOS_MAX_DISTANCE_M) {
+          setErrorMsg(
+            `"${nodeA.name}" → "${nodeB.name}" is ${Math.round(distM / 1000)} km apart.\n` +
+            `LOS analysis is capped at ${LOS_MAX_DISTANCE_M / 1000} km — LoRa links beyond this distance are not physically realistic.`
+          );
+          return;
+        }
+      }
+    }
+
+    losCancelRef.current = false;
     setAnalysisLoading(true);
     setStatusMessage('Running Line of Sight analysis...');
     clearLOSOverlays();
 
     const overlays: LOSOverlay[] = [];
-    const selectedNodes = nodes.filter((n) => selectedNodeIds.includes(String(n.id)));
 
     for (let i = 0; i < selectedNodes.length; i++) {
       for (let j = i + 1; j < selectedNodes.length; j++) {
+        if (losCancelRef.current) break;
         const nodeA = selectedNodes[i];
         const nodeB = selectedNodes[j];
         try {
           const result = await api.getLOSProfile(nodeA, nodeB);
+          if (losCancelRef.current) break;
           overlays.push({
             id: `los-${nodeA.id}-${nodeB.id}`,
             nodeAUuid: String(nodeA.id),
@@ -1621,17 +1654,20 @@ export function AppLayout() {
     }
 
     setLOSOverlays(overlays);
-    const viable = overlays.filter((o) => o.isViable).length;
-    const clearLos = overlays.filter((o) => o.hasLos).length;
-    const obstructed = overlays.length - clearLos;
-    const terrainNote = obstructed > 0 ? ` | ${obstructed} terrain-obstructed` : '';
-    // Show elevation source info so user knows if real terrain was used
-    const elevSources = [...new Set(overlays.map((o) => o.elevationSource))];
-    const hasSrtm = elevSources.some((s) => s.startsWith('srtm'));
-    const elevNote = hasSrtm ? ' [SRTM terrain]' : ' [flat terrain - no SRTM data]';
-    setStatusMessage(`LOS: ${overlays.length} link(s), ${viable} viable, ${clearLos} clear${terrainNote}.${elevNote} Click lines for details.`);
+    if (losCancelRef.current) {
+      setStatusMessage('LOS analysis cancelled.');
+    } else {
+      const viable = overlays.filter((o) => o.isViable).length;
+      const clearLos = overlays.filter((o) => o.hasLos).length;
+      const obstructed = overlays.length - clearLos;
+      const terrainNote = obstructed > 0 ? ` | ${obstructed} terrain-obstructed` : '';
+      const elevSources = [...new Set(overlays.map((o) => o.elevationSource))];
+      const hasSrtm = elevSources.some((s) => s.startsWith('srtm'));
+      const elevNote = hasSrtm ? ' [SRTM terrain]' : ' [flat terrain - no SRTM data]';
+      setStatusMessage(`LOS: ${overlays.length} link(s), ${viable} viable, ${clearLos} clear${terrainNote}.${elevNote} Click lines for details.`);
+    }
     setAnalysisLoading(false);
-  }, [currentPlan, selectedNodeIds, nodes, api, setLOSOverlays, clearLOSOverlays]);
+  }, [currentPlan, selectedNodeIds, nodes, api, setLOSOverlays, clearLOSOverlays, haversineM]);
 
   const runCoverageAnalysis = useCallback(async (envOverride?: string) => {
     if (!currentPlan) { setErrorMsg('Open a plan first.'); return; }
@@ -3157,12 +3193,19 @@ export function AppLayout() {
         <div
           className="analysis-loading-overlay"
           role="progressbar"
-          aria-label="Coverage analysis in progress"
+          aria-label="Analysis in progress"
           aria-busy="true"
         >
           <div className="analysis-loading-box">
             <span className="analysis-loading-spinner" aria-hidden="true" />
             <span className="analysis-loading-text">{buildStatus()}</span>
+            <button
+              className="analysis-loading-cancel"
+              type="button"
+              onClick={() => { losCancelRef.current = true; setAnalysisLoading(false); setStatusMessage('Analysis cancelled.'); }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

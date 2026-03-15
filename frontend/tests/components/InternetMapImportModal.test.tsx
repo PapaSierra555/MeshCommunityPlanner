@@ -306,6 +306,81 @@ describe('InternetMapImportModal', () => {
     });
   });
 
+  // ---- Title ----
+
+  describe('modal title', () => {
+    it('shows "Import Nodes — MeshCore Map" in the header', () => {
+      vi.stubGlobal('fetch', makeFetchOk());
+      render(<InternetMapImportModal {...defaultProps} />);
+      expect(screen.getByText('Import Nodes — MeshCore Map')).toBeTruthy();
+    });
+  });
+
+  // ---- Bulk import warning (>5 nodes) ----
+
+  describe('bulk import warning', () => {
+    const BULK_NODES = Array.from({ length: 6 }, (_, i) => ({
+      name: `Node${i + 1}`,
+      lat: 25 + i * 0.1,
+      lon: -80 - i * 0.1,
+      description: '',
+    }));
+
+    beforeEach(() => {
+      vi.stubGlobal('fetch', makeFetchOk(BULK_NODES));
+    });
+
+    it('shows bulk warning when >5 nodes selected and import clicked', async () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      await clickFetchAndWaitForPreview();
+      // All 6 pre-selected — click Import
+      const importBtn = screen.getByRole('button', { name: /import 6 selected/i });
+      fireEvent.click(importBtn);
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeTruthy();
+        expect(screen.getByText(/importing 6 nodes/i)).toBeTruthy();
+      });
+    });
+
+    it('confirm button in bulk warning proceeds with import', async () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      await clickFetchAndWaitForPreview();
+      fireEvent.click(screen.getByRole('button', { name: /import 6 selected/i }));
+      await waitFor(() => screen.getByText(/importing 6 nodes/i));
+      // Click the confirm button
+      const confirmBtn = screen.getByRole('button', { name: /import 6 nodes/i });
+      await act(async () => { fireEvent.click(confirmBtn); });
+      // Warning dismissed
+      await waitFor(() => {
+        expect(screen.queryByRole('alert')).toBeNull();
+      });
+    });
+
+    it('cancel button in bulk warning dismisses warning and shows import button again', async () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      await clickFetchAndWaitForPreview();
+      fireEvent.click(screen.getByRole('button', { name: /import 6 selected/i }));
+      await waitFor(() => screen.getByText(/importing 6 nodes/i));
+      fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+      // Import button is back
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /import 6 selected/i })).toBeTruthy();
+      });
+    });
+
+    it('no warning when ≤5 nodes selected', async () => {
+      // Use only 3 nodes
+      vi.stubGlobal('fetch', makeFetchOk(MOCK_NODES));
+      render(<InternetMapImportModal {...defaultProps} />);
+      await clickFetchAndWaitForPreview();
+      // 3 nodes pre-selected — click import directly, no warning alert
+      const importBtn = screen.getByRole('button', { name: /import 3 selected/i });
+      await act(async () => { fireEvent.click(importBtn); });
+      // No alert/warning div
+      expect(screen.queryByText(/importing 3 nodes/i)).toBeNull();
+    });
+  });
+
   // ---- Accessibility ----
 
   describe('accessibility', () => {
