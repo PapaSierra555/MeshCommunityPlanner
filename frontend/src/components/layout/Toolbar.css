@@ -198,6 +198,42 @@
   margin: 0.25rem 0.5rem;
 }
 
+/* ---- Nested Submenu (e.g., Export Plan As) ---- */
+
+.toolbar-submenu-wrapper {
+  position: relative;
+}
+
+.toolbar-submenu-wrapper.disabled {
+  pointer-events: none;
+}
+
+.toolbar-submenu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.toolbar-submenu-arrow {
+  font-size: 0.6rem;
+  color: #95a5a6;
+}
+
+.toolbar-submenu-panel {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  margin-left: 2px;
+  min-width: 220px;
+  background-color: #1e2a38;
+  border: 1px solid #34495e;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  padding: 0.3rem 0;
+  z-index: 250;
+}
+
 /* ---- Info Dropdown ---- */
 
 .toolbar-info-dropdown {

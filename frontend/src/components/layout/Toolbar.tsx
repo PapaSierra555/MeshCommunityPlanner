@@ -136,6 +136,7 @@ export function Toolbar({
   coverageEnv,
 }: ToolbarProps) {
   const [openMenu, setOpenMenu] = useState<null | 'plan' | 'tools' | 'catalog' | 'info' | 'appinfo' | 'moretools'>(null);
+  const [exportSubmenuOpen, setExportSubmenuOpen] = useState(false);
   const [moreToolsProtocol, setMoreToolsProtocol] = useState<'meshtastic' | 'meshcore' | 'reticulum' | null>(null);
   const [expandedPlanIds, setExpandedPlanIds] = useState<Set<string>>(new Set());
   const [expandedHelpSections, setExpandedHelpSections] = useState<Set<string>>(new Set());
@@ -223,6 +224,11 @@ export function Toolbar({
     if (openMenu !== 'moretools') setMoreToolsProtocol(null);
   }, [openMenu]);
 
+  // Close Export Plan As submenu when Plan menu closes
+  useEffect(() => {
+    if (openMenu !== 'plan') setExportSubmenuOpen(false);
+  }, [openMenu]);
+
   const toggleHelpSection = useCallback((id: string) => {
     setExpandedHelpSections(prev => {
       const next = new Set(prev);
@@ -289,22 +295,63 @@ export function Toolbar({
                     title="Open an existing plan from the database">
                     Open Plan
                   </button>
+                  <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
+                    onClick={() => hasPlan && handleItemClick(onDuplicatePlan)}
+                    title="Create an exact copy of the current plan and all its nodes">
+                    Duplicate Plan
+                  </button>
                   <button className="toolbar-dropdown-item" type="button"
                     onClick={() => handleItemClick(onImportPlan)}
                     title="Import plan(s) from .meshplan.json files on disk">
                     Import Plan(s)
                   </button>
-                  <div className="toolbar-dropdown-separator" />
                   <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
                     onClick={() => hasPlan && handleItemClick(onExportPlan)}
                     title="Save the current plan as a .meshplan.json file for sharing or backup">
                     Export Plan
                   </button>
-                  <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
-                    onClick={() => hasPlan && handleItemClick(onExportCSV)}
-                    title="Export all node locations and configuration as a CSV spreadsheet">
-                    Export Nodes (CSV)
-                  </button>
+                  <div
+                    className={`toolbar-submenu-wrapper${!hasPlan ? ' disabled' : ''}`}
+                    onMouseEnter={() => hasPlan && setExportSubmenuOpen(true)}
+                    onMouseLeave={() => setExportSubmenuOpen(false)}
+                    onClick={() => hasPlan && setExportSubmenuOpen(!exportSubmenuOpen)}
+                    onKeyUp={(e) => { if (e.key === ' ') setExportSubmenuOpen(!exportSubmenuOpen); }}
+                  >
+                    <button
+                      className={`toolbar-dropdown-item toolbar-submenu-trigger${!hasPlan ? ' disabled' : ''}`}
+                      type="button"
+                      aria-haspopup="true"
+                      aria-expanded={exportSubmenuOpen}
+                      title="Export the current plan in different mapping formats"
+                      disabled={!hasPlan}
+                    >
+                      Export Plan As
+                      <span className="toolbar-submenu-arrow" aria-hidden="true">&#9656;</span>
+                    </button>
+                    {hasPlan && exportSubmenuOpen && (
+                      <div className="toolbar-submenu-panel" role="menu">
+                        <button
+                          role="menuitem"
+                          className="toolbar-dropdown-item"
+                          type="button"
+                          onClick={() => { setExportSubmenuOpen(false); handleItemClick(onExportKML); }}
+                          title="Export plan as KML for Google Earth, ArcGIS, and other GIS tools"
+                        >
+                          KML (Google Earth / GIS)
+                        </button>
+                        <button
+                          role="menuitem"
+                          className="toolbar-dropdown-item"
+                          type="button"
+                          onClick={() => { setExportSubmenuOpen(false); handleItemClick(onExportGeoJSON); }}
+                          title="Export plan as GeoJSON for QGIS, ArcGIS, mapbox, and other GIS tools"
+                        >
+                          GeoJSON (GIS / Web Maps)
+                        </button>
+                       </div>
+                    )}
+                  </div>
+                  <div className="toolbar-dropdown-separator" />
                   <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
                     onClick={() => hasPlan && handleItemClick(onImportCSV)}
                     title="Import node locations from a CSV file — requires name, latitude, longitude columns">
@@ -318,7 +365,7 @@ export function Toolbar({
                   <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
                     onClick={() => hasPlan && handleItemClick(onImportFromMap)}
                     title="Import nodes from online mesh network maps (MeshCore Map, rmap.world)">
-                    Import Nodes from Map...
+                    Import Nodes (Internet)
                   </button>
                   <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
                     onClick={() => hasPlan && handleItemClick(onImportSignal)}
@@ -326,19 +373,9 @@ export function Toolbar({
                     Import Signal Data (CSV)
                   </button>
                   <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
-                    onClick={() => hasPlan && handleItemClick(onExportKML)}
-                    title="Export plan as KML for Google Earth, ArcGIS, and other GIS tools">
-                    Export Plan (KML)
-                  </button>
-                  <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
-                    onClick={() => hasPlan && handleItemClick(onExportGeoJSON)}
-                    title="Export plan as GeoJSON for QGIS, ArcGIS, mapbox, and other GIS tools">
-                    Export Plan (GeoJSON)
-                  </button>
-                  <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
-                    onClick={() => hasPlan && handleItemClick(onDuplicatePlan)}
-                    title="Create an exact copy of the current plan and all its nodes">
-                    Duplicate Plan
+                    onClick={() => hasPlan && handleItemClick(onExportCSV)}
+                    title="Export all node locations and configuration as a CSV spreadsheet">
+                    Export Nodes (CSV)
                   </button>
                   <div className="toolbar-dropdown-separator" />
                   <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
@@ -473,32 +510,28 @@ export function Toolbar({
                     className={`toolbar-dropdown-item${!hasPlan || analysisLoading ? ' disabled' : ''}`}
                     type="button"
                     onClick={() => hasPlan && !analysisLoading && handleItemClick(onLineOfSight)}
-                    title="Calculate line-of-sight links between nodes using terrain data. Select 2+ nodes for a subset, or run on all nodes."
-                  >
+                    title="Calculate line-of-sight links between nodes using terrain data. Select 2+ nodes for a subset, or run on all nodes.">
                     Line of Sight{selectedCount >= 2 ? ` (${selectedCount} nodes)` : ' (all nodes)'}
                   </button>
                   <button
                     className={`toolbar-dropdown-item${!hasPlan || analysisLoading ? ' disabled' : ''}`}
                     type="button"
                     onClick={() => hasPlan && !analysisLoading && handleItemClick(onCoverageAnalysis)}
-                    title="Generate a coverage heatmap showing radio signal strength across the area"
-                  >
+                    title="Generate a coverage heatmap showing radio signal strength across the area">
                     {analysisLoading ? 'Computing...' : `Coverage Analysis${selectedCount > 0 ? ` (${selectedCount} nodes)` : ' (all nodes)'}`}
                   </button>
                   <button
                     className={`toolbar-dropdown-item${!hasPlan || analysisLoading ? ' disabled' : ''}`}
                     type="button"
                     onClick={() => hasPlan && !analysisLoading && handleItemClick(onViewshed)}
-                    title="Analyze line-of-sight visibility from one node to all others using SRTM terrain"
-                  >
+                    title="Analyze line-of-sight visibility from one node to all others using SRTM terrain">
                     Viewshed Analysis{selectedCount === 1 ? ' (1 observer)' : ''}
                   </button>
                   <button
                     className={`toolbar-dropdown-item${!hasPlan || !hasLOSOverlays ? ' disabled' : ''}`}
                     type="button"
                     onClick={() => hasPlan && hasLOSOverlays && handleItemClick(onFindRoute)}
-                    title="Find the shortest multi-hop path between two selected nodes using LOS links"
-                  >
+                    title="Find the shortest multi-hop path between two selected nodes using LOS links">
                     Find Route{selectedCount === 2 ? ' (2 nodes)' : ''}
                   </button>
                   <div className="toolbar-dropdown-separator" />
@@ -506,8 +539,7 @@ export function Toolbar({
                     className="toolbar-dropdown-item"
                     type="button"
                     onClick={() => handleItemClick(onToggleElevation)}
-                    title="Toggle an elevation heatmap layer showing terrain height (requires SRTM data download)"
-                  >
+                    title="Toggle an elevation heatmap layer showing terrain height (requires SRTM data download)">
                     {elevationEnabled ? '\u2713 ' : ''}Elevation Heatmap
                   </button>
                   <div className="toolbar-dropdown-separator" />
@@ -515,8 +547,7 @@ export function Toolbar({
                     className="toolbar-dropdown-item"
                     type="button"
                     onClick={() => { setOpenMenu(null); setTimeout(() => setOpenMenu('moretools'), 0); }}
-                    title="Open the protocol-organized tool library"
-                  >
+                    title="Open the protocol-organized tool library">
                     More Tools
                     <span className="toolbar-dropdown-protocol-icons" aria-hidden="true">
                       <img src={meshtasticIcon} alt="" className="toolbar-protocol-icon" />
@@ -529,33 +560,22 @@ export function Toolbar({
                     className={`toolbar-dropdown-item${!hasLOSOverlays ? ' disabled' : ''}`}
                     type="button"
                     onClick={() => hasLOSOverlays && handleItemClick(onLinkReport)}
-                    title="View a detailed table of all LOS links with distance, signal, and quality metrics"
-                  >
+                    title="View a detailed table of all LOS links with distance, signal, and quality metrics">
                     Link Report
                   </button>
                   <div className="toolbar-dropdown-separator" />
                   <button
-                    className={`toolbar-dropdown-item${!hasOverlays ? ' disabled' : ''}`}
-                    type="button"
-                    onClick={() => hasOverlays && handleItemClick(onClearOverlays)}
-                    title="Remove all analysis overlays (LOS, coverage, viewshed, routes) from the map"
-                  >
-                    Clear Overlays
-                  </button>
-                  <button
                     className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`}
                     type="button"
                     onClick={() => hasPlan && handleItemClick(onExportMaterialList)}
-                    title="Generate a Bill of Materials listing all devices, antennas, and accessories with costs"
-                  >
+                    title="Generate a Bill of Materials listing all devices, antennas, and accessories with costs">
                     Export Material List
                   </button>
                   <button
                     className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`}
                     type="button"
                     onClick={() => hasPlan && handleItemClick(onExportNetworkPDF)}
-                    title="Generate a professional PDF report with network topology, link quality, and recommendations"
-                  >
+                    title="Generate a professional PDF report with network topology, link quality, and recommendations">
                     Export Network Report (PDF)
                   </button>
                   <div className="toolbar-dropdown-separator" />
@@ -563,9 +583,15 @@ export function Toolbar({
                     className="toolbar-dropdown-item"
                     type="button"
                     onClick={() => handleItemClick(onSaveScreenshot)}
-                    title="Save the current map view as a PNG image"
-                  >
+                    title="Save the current map view as a PNG image">
                     Save Screenshot
+                  </button>
+                  <button
+                    className={`toolbar-dropdown-item toolbar-dropdown-item-danger${!hasOverlays ? ' disabled' : ''}`}
+                    type="button"
+                    onClick={() => hasOverlays && handleItemClick(onClearOverlays)}
+                    title="Remove all analysis overlays (LOS, coverage, viewshed, routes) from the map">
+                    Clear Overlays
                   </button>
                 </div>
               )}
