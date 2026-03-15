@@ -126,27 +126,41 @@
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, background 0.15s;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  width: 100%;
+}
+
+.imim-source-card:hover {
+  border-color: #5d8ab8;
+  background: #2a3d50;
 }
 
 .imim-source-card--active {
   border-color: #4472C4;
-  cursor: default;
+  background: #1e3352;
 }
 
 .imim-source-card--active:hover {
   border-color: #6b9ad4;
-}
-
-.imim-source-card--disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  background: #1e3352;
 }
 
 .imim-source-card-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.imim-source-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  opacity: 0.75;
+  flex-shrink: 0;
 }
 
 .imim-source-name {

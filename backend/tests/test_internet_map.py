@@ -476,3 +476,216 @@ class TestPingEndpoint:
 
         assert resp.status_code == 200
         assert resp.json() == {"online": False}
+
+
+# ============================================================================
+# Reticulum source — directory.rns.recipes
+# ============================================================================
+
+
+def _mock_json_response(data: Any, status_code: int = 200):
+    """Build a mock httpx Response returning JSON."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = status_code
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.json = MagicMock(return_value=data)
+    return mock_resp
+
+
+class TestReticulumValidResponse:
+    """source=reticulum fetches submitted + discovered from directory.rns.recipes."""
+
+    def _make_mock_client(self, submitted_data, discovered_data):
+        """Return an AsyncMock httpx client that returns different JSON per URL."""
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        def side_effect(url, **kwargs):
+            if "submitted" in url:
+                return _mock_json_response(submitted_data)
+            return _mock_json_response(discovered_data)
+
+        mock_client.get = AsyncMock(side_effect=side_effect)
+        return mock_client
+
+    def test_valid_nodes_returns_200_with_shape(self, client):
+        """Mocked JSON response → 200, source='reticulum', nodes/count keys."""
+        submitted = {"data": [
+            {"name": "Node Alpha", "location": "25.7617,-80.1918", "typeName": "RNode",
+             "frequencyHuman": "915 MHz", "bandwidthHuman": "250 kHz", "spreadingFactor": 11},
+        ]}
+        discovered = {"data": [
+            {"name": "Node Beta", "location": "30.3322,-81.6557", "typeName": "NomadNet"},
+        ]}
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value = self._make_mock_client(submitted, discovered)
+            resp = client.get("/api/import/internet-map?source=reticulum", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["source"] == "reticulum"
+        assert body["count"] == 2
+        assert len(body["nodes"]) == 2
+
+    def test_normalized_node_has_name_lat_lon_description(self, client):
+        """Normalized Reticulum node has all required fields."""
+        submitted = {"data": [
+            {"name": "RNode One", "location": "25.0,-80.0", "typeName": "RNode",
+             "frequencyHuman": "915 MHz", "bandwidthHuman": "125 kHz",
+             "spreadingFactor": 9, "codingRate": "4/5"},
+        ]}
+        discovered = {"data": []}
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value = self._make_mock_client(submitted, discovered)
+            resp = client.get("/api/import/internet-map?source=reticulum", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        node = resp.json()["nodes"][0]
+        assert node["name"] == "RNode One"
+        assert node["lat"] == pytest.approx(25.0, abs=0.0001)
+        assert node["lon"] == pytest.approx(-80.0, abs=0.0001)
+        assert "RNode" in node["description"]
+        assert "915" in node["description"]
+
+    def test_duplicate_nodes_from_submitted_and_discovered_are_deduplicated(self, client):
+        """Same node in both submitted and discovered appears only once."""
+        node = {"name": "DupNode", "location": "25.0,-80.0", "typeName": "RNode"}
+        submitted = {"data": [node]}
+        discovered = {"data": [node]}
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value = self._make_mock_client(submitted, discovered)
+            resp = client.get("/api/import/internet-map?source=reticulum", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 1
+
+    def test_nodes_without_location_are_skipped(self, client):
+        """Reticulum nodes with no location field are excluded."""
+        submitted = {"data": [
+            {"name": "NoLoc", "typeName": "RNode"},
+            {"name": "EmptyLoc", "location": "", "typeName": "RNode"},
+            {"name": "NullLoc", "location": None, "typeName": "RNode"},
+            {"name": "Good", "location": "25.0,-80.0", "typeName": "RNode"},
+        ]}
+        discovered = {"data": []}
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value = self._make_mock_client(submitted, discovered)
+            resp = client.get("/api/import/internet-map?source=reticulum", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 1
+
+    def test_null_island_nodes_are_skipped(self, client):
+        """Nodes at 0,0 (null island) are filtered — they have no real position."""
+        submitted = {"data": [
+            {"name": "NullIsland", "location": "0,0", "typeName": "RNode"},
+            {"name": "Good", "location": "25.0,-80.0", "typeName": "RNode"},
+        ]}
+        discovered = {"data": []}
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value = self._make_mock_client(submitted, discovered)
+            resp = client.get("/api/import/internet-map?source=reticulum", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 1
+
+    def test_nodes_without_name_are_skipped(self, client):
+        """Reticulum nodes with no name are excluded."""
+        submitted = {"data": [
+            {"name": "", "location": "25.0,-80.0", "typeName": "RNode"},
+            {"location": "26.0,-81.0", "typeName": "RNode"},
+            {"name": "Valid", "location": "27.0,-82.0", "typeName": "RNode"},
+        ]}
+        discovered = {"data": []}
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value = self._make_mock_client(submitted, discovered)
+            resp = client.get("/api/import/internet-map?source=reticulum", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 1
+
+    def test_empty_lists_return_count_zero(self, client):
+        """Both submitted and discovered empty → count=0."""
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_cls.return_value = self._make_mock_client({"data": []}, {"data": []})
+            resp = client.get("/api/import/internet-map?source=reticulum", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        assert resp.json()["count"] == 0
+
+
+class TestReticulumUpstreamErrors:
+    """Upstream failures for the Reticulum source return 503."""
+
+    def test_timeout_returns_503(self, client):
+        import httpx
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.get = AsyncMock(side_effect=httpx.TimeoutException("timed out"))
+            mock_cls.return_value = mock_client
+
+            resp = client.get("/api/import/internet-map?source=reticulum", headers=_auth_headers())
+
+        assert resp.status_code == 503
+        assert "timed out" in resp.json()["detail"].lower()
+
+    def test_http_error_returns_503(self, client):
+        import httpx
+
+        mock_inner = MagicMock()
+        mock_inner.status_code = 503
+        err = httpx.HTTPStatusError("503", request=MagicMock(), response=mock_inner)
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status = MagicMock(side_effect=err)
+            mock_client.get = AsyncMock(return_value=mock_resp)
+            mock_cls.return_value = mock_client
+
+            resp = client.get("/api/import/internet-map?source=reticulum", headers=_auth_headers())
+
+        assert resp.status_code == 503
+
+
+class TestSourceValidationReticulum:
+    """'reticulum' is a valid source; unknown strings still return 400."""
+
+    def test_source_reticulum_is_accepted(self, client):
+        """source=reticulum is a valid source — does not return 400."""
+        submitted = {"data": [{"name": "N", "location": "25.0,-80.0", "typeName": "RNode"}]}
+        discovered = {"data": []}
+
+        def side_effect(url, **kwargs):
+            if "submitted" in url:
+                return _mock_json_response(submitted)
+            return _mock_json_response(discovered)
+
+        with patch("httpx.AsyncClient") as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=False)
+            mock_client.get = AsyncMock(side_effect=side_effect)
+            mock_cls.return_value = mock_client
+
+            resp = client.get("/api/import/internet-map?source=reticulum", headers=_auth_headers())
+
+        assert resp.status_code == 200
+
+    def test_unknown_source_still_returns_400(self, client):
+        """source=unknown still returns 400 now that reticulum is valid."""
+        resp = client.get("/api/import/internet-map?source=lora-wan", headers=_auth_headers())
+        assert resp.status_code == 400
+        assert "supported" in resp.json()["detail"].lower()

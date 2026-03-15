@@ -101,12 +101,30 @@ describe('InternetMapImportModal', () => {
       expect(screen.getByText('MeshCore Map')).toBeTruthy();
     });
 
-    it('shows the rmap.world coming-soon card', () => {
+    it('shows the Reticulum Network card', () => {
       render(<InternetMapImportModal {...defaultProps} />);
-      // rmap.world appears in both the card name and url — just check it's present
-      const elements = screen.getAllByText('rmap.world');
-      expect(elements.length).toBeGreaterThan(0);
-      expect(screen.getByText('Coming Soon')).toBeTruthy();
+      expect(screen.getByText('Reticulum Network')).toBeTruthy();
+    });
+
+    it('Reticulum card shows "Live" badge (not "Coming Soon")', () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      // Both source cards show "Live" — verify at least one badge is present and no Coming Soon
+      const liveBadges = screen.getAllByText('Live');
+      expect(liveBadges.length).toBeGreaterThanOrEqual(1);
+      expect(screen.queryByText('Coming Soon')).toBeNull();
+    });
+
+    it('clicking Reticulum card makes it active (aria-pressed=true)', () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      const reticulumBtn = screen.getByRole('button', { name: /reticulum network/i });
+      fireEvent.click(reticulumBtn);
+      expect(reticulumBtn.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('clicking Reticulum card updates the modal title', () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /reticulum network/i }));
+      expect(screen.getByText('Import Nodes — Reticulum Network')).toBeTruthy();
     });
 
     it('renders Fetch Nodes button in phase 1', () => {

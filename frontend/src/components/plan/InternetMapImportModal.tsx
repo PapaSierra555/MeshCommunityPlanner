@@ -2,14 +2,18 @@
  * InternetMapImportModal
  * Two-phase modal for importing nodes from public mesh network maps.
  *
- * Phase 1: Source selection + fetch
+ * Phase 1: Source selection + fetch (MeshCore or Reticulum)
  * Phase 2: Preview / filter / select / import
+ *
+ * Both sources produce the same normalized {name, lat, lon, description} shape
+ * from the backend proxy.  The UI is identical regardless of source.
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getAPIClient } from '../../services/api';
 import { usePlanStore } from '../../stores/planStore';
 import meshcoreIcon from '../../assets/icons/meshcore.svg';
+import reticulumIcon from '../../assets/icons/reticulum.svg';
 import './InternetMapImportModal.css';
 
 /** Read the injected auth token (set by the backend at startup). */
@@ -46,11 +50,32 @@ interface InternetMapImportModalProps {
 }
 
 type Phase = 'select' | 'preview';
+type Source = 'meshcore' | 'reticulum';
+
+// ---- Source metadata ----
+
+const SOURCE_META: Record<Source, { title: string; subtitle: string; icon: string; url: string; desc: string }> = {
+  meshcore: {
+    title: 'Import Nodes — MeshCore Map',
+    subtitle: 'Fetch live node positions from map.meshcore.dev',
+    icon: meshcoreIcon,
+    url: 'map.meshcore.dev',
+    desc: 'Live node positions from the MeshCore global mesh network map. Includes node name, coordinates, and radio parameters.',
+  },
+  reticulum: {
+    title: 'Import Nodes — Reticulum Network',
+    subtitle: 'Fetch node positions from directory.rns.recipes',
+    icon: reticulumIcon,
+    url: 'directory.rns.recipes',
+    desc: 'Reticulum mesh network node directory. Includes submitted and discovered nodes with coordinates and radio parameters.',
+  },
+};
 
 // ---- Component ----
 
 export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapImportModalProps) {
   const [phase, setPhase] = useState<Phase>('select');
+  const [selectedSource, setSelectedSource] = useState<Source>('meshcore');
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [mapNodes, setMapNodes] = useState<MapNode[]>([]);
@@ -67,6 +92,7 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
   useEffect(() => {
     if (!isOpen) {
       setPhase('select');
+      setSelectedSource('meshcore');
       setLoading(false);
       setFetchError(null);
       setMapNodes([]);
@@ -94,12 +120,12 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
 
   // ---- Actions ----
 
-  const handleFetch = useCallback(async () => {
+  const handleFetch = useCallback(async (source: Source) => {
     setLoading(true);
     setFetchError(null);
     try {
       const data = await apiGet<{ nodes: MapNode[]; count: number; source: string }>(
-        '/import/internet-map?source=meshcore'
+        `/import/internet-map?source=${source}`
       );
       const fetched: MapNode[] = Array.isArray(data.nodes) ? data.nodes : [];
       setMapNodes(fetched);
@@ -107,7 +133,7 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
       setSelected(new Set(fetched.map((_: MapNode, i: number) => i)));
       setPhase('preview');
     } catch (err: any) {
-      const msg = err?.message || err?.detail || 'Failed to fetch nodes from MeshCore map.';
+      const msg = err?.message || err?.detail || `Failed to fetch nodes from ${SOURCE_META[source].url}.`;
       setFetchError(msg);
     } finally {
       setLoading(false);
@@ -146,7 +172,7 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
     const defaults = {
       antenna_height_m: 3.0,
       device_id: refNode?.device_id || 'tbeam-supreme',
-      firmware: refNode?.firmware || currentPlan.firmware_family || 'meshcore',
+      firmware: refNode?.firmware || currentPlan.firmware_family || selectedSource === 'reticulum' ? 'reticulum' : 'meshcore',
       region: refNode?.region || currentPlan.region || 'us_fcc',
       frequency_mhz: refNode?.frequency_mhz ?? 906.875,
       tx_power_dbm: refNode?.tx_power_dbm ?? 20,
@@ -197,9 +223,11 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
     if (failures === 0 && created.length > 0) {
       setTimeout(() => onClose(), 1500);
     }
-  }, [planId, currentPlan, existingNodes, mapNodes, selected, onClose, setPlanNodes]);
+  }, [planId, currentPlan, existingNodes, mapNodes, selected, selectedSource, onClose, setPlanNodes]);
 
   if (!isOpen) return null;
+
+  const meta = SOURCE_META[selectedSource];
 
   // ---- Render ----
 
@@ -210,12 +238,10 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
         <div className="imim-header">
           <div>
             <h2 className="imim-title">
-              <img src={meshcoreIcon} className="imim-title-icon" alt="" aria-hidden="true" />
-              Import Nodes — MeshCore Map
+              <img src={meta.icon} className="imim-title-icon" alt="" aria-hidden="true" />
+              {meta.title}
             </h2>
-            <p className="imim-subtitle">
-              Fetch live node positions from map.meshcore.dev
-            </p>
+            <p className="imim-subtitle">{meta.subtitle}</p>
           </div>
           <button className="imim-close" type="button" onClick={onClose} title="Close">&times;</button>
         </div>
@@ -226,7 +252,9 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
             <PhaseSelect
               loading={loading}
               error={fetchError}
-              onFetch={handleFetch}
+              activeSource={selectedSource}
+              onSourceSelect={setSelectedSource}
+              onFetch={() => handleFetch(selectedSource)}
             />
           )}
           {phase === 'preview' && (
@@ -257,17 +285,25 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
 interface PhaseSelectProps {
   loading: boolean;
   error: string | null;
+  activeSource: Source;
+  onSourceSelect: (s: Source) => void;
   onFetch: () => void;
 }
 
-function PhaseSelect({ loading, error, onFetch }: PhaseSelectProps) {
+function PhaseSelect({ loading, error, activeSource, onSourceSelect, onFetch }: PhaseSelectProps) {
   return (
     <div className="imim-phase-select">
       <p className="imim-section-label">Choose a map source</p>
       <div className="imim-source-cards">
-        {/* MeshCore Map — active */}
-        <div className="imim-source-card imim-source-card--active">
+        {/* MeshCore Map */}
+        <button
+          type="button"
+          className={`imim-source-card${activeSource === 'meshcore' ? ' imim-source-card--active' : ''}`}
+          onClick={() => onSourceSelect('meshcore')}
+          aria-pressed={activeSource === 'meshcore'}
+        >
           <div className="imim-source-card-header">
+            <img src={meshcoreIcon} className="imim-source-icon" alt="" aria-hidden="true" />
             <span className="imim-source-name">MeshCore Map</span>
             <span className="imim-source-badge imim-source-badge--live">Live</span>
           </div>
@@ -276,19 +312,26 @@ function PhaseSelect({ loading, error, onFetch }: PhaseSelectProps) {
             Live node positions from the MeshCore global mesh network map.
             Includes node name, coordinates, and radio parameters.
           </p>
-        </div>
+        </button>
 
-        {/* rmap.world — coming soon */}
-        <div className="imim-source-card imim-source-card--disabled">
+        {/* Reticulum Network */}
+        <button
+          type="button"
+          className={`imim-source-card${activeSource === 'reticulum' ? ' imim-source-card--active' : ''}`}
+          onClick={() => onSourceSelect('reticulum')}
+          aria-pressed={activeSource === 'reticulum'}
+        >
           <div className="imim-source-card-header">
-            <span className="imim-source-name">rmap.world</span>
-            <span className="imim-source-badge imim-source-badge--soon">Coming Soon</span>
+            <img src={reticulumIcon} className="imim-source-icon" alt="" aria-hidden="true" />
+            <span className="imim-source-name">Reticulum Network</span>
+            <span className="imim-source-badge imim-source-badge--live">Live</span>
           </div>
-          <p className="imim-source-url">rmap.world</p>
+          <p className="imim-source-url">directory.rns.recipes</p>
           <p className="imim-source-desc">
-            Reticulum mesh network node map. Not yet available.
+            Reticulum mesh network node directory. Includes submitted and
+            discovered nodes with coordinates and radio parameters.
           </p>
-        </div>
+        </button>
       </div>
 
       {error && (
@@ -303,7 +346,7 @@ function PhaseSelect({ loading, error, onFetch }: PhaseSelectProps) {
           type="button"
           onClick={onFetch}
           disabled={loading}
-          title="Fetch nodes from MeshCore Map"
+          title={`Fetch nodes from ${SOURCE_META[activeSource].url}`}
         >
           {loading ? (
             <><span className="imim-spinner" aria-hidden="true" /> Fetching&hellip;</>

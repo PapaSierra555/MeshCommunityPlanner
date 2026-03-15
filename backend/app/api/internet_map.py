@@ -3,6 +3,7 @@ Internet Map Import API — proxy endpoint for fetching nodes from public mesh n
 
 Supports:
 - MeshCore Map (map.meshcore.dev) — returns msgpack binary, decoded here and normalized
+- Reticulum Network (directory.rns.recipes) — returns JSON, submitted + discovered nodes
 
 Returns a JSON-serializable list of node-like dicts with: name, lat, lon, description.
 The frontend calls this proxy rather than the external API directly to avoid CORS issues
@@ -23,6 +24,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 MESHCORE_API_URL = "https://map.meshcore.dev/api/v1/nodes?binary=1&short=1"
+RETICULUM_SUBMITTED_URL = "https://directory.rns.recipes/api/directory/submitted"
+RETICULUM_DISCOVERED_URL = "https://directory.rns.recipes/api/directory/discovered"
 
 # Node type labels from the MeshCore map source
 _NODE_TYPE_LABELS: dict[int, str] = {
@@ -30,6 +33,11 @@ _NODE_TYPE_LABELS: dict[int, str] = {
     2: "Repeater",
     3: "Room Server",
     4: "Sensor",
+}
+
+_RETICULUM_FETCH_HEADERS = {
+    "Accept": "application/json",
+    "X-Requested-With": "XMLHttpRequest",
 }
 
 
@@ -107,6 +115,103 @@ def _normalize_meshcore_nodes(raw_nodes: list[Any]) -> list[dict[str, Any]]:
     return normalized
 
 
+def _parse_reticulum_location(location: Any) -> tuple[float, float] | None:
+    """Parse a 'lat,lon' location string from directory.rns.recipes.
+
+    Returns (lat, lon) floats, or None if the string is missing, empty,
+    or does not contain valid coordinates.
+    """
+    if not location or not isinstance(location, str):
+        return None
+    parts = location.strip().split(",")
+    if len(parts) != 2:
+        return None
+    try:
+        lat = float(parts[0].strip())
+        lon = float(parts[1].strip())
+    except ValueError:
+        return None
+    if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+        return None
+    # Nodes reported at 0,0 (null island) have no real position
+    if lat == 0.0 and lon == 0.0:
+        return None
+    return lat, lon
+
+
+def _normalize_reticulum_nodes(raw_nodes: list[Any]) -> list[dict[str, Any]]:
+    """Normalize raw directory.rns.recipes JSON node objects into our standard shape.
+
+    Each raw node has (at minimum):
+      name         — display name
+      typeName     — human-readable node type (e.g. "RNode", "NomadNet", "TCP")
+      location     — "lat,lon" string (may be missing or empty)
+      frequencyHuman — e.g. "915 MHz" (LoRa nodes only)
+      bandwidthHuman — e.g. "250 kHz" (LoRa nodes only)
+      spreadingFactor — int (LoRa nodes only)
+      codingRate   — e.g. "4/5" (LoRa nodes only)
+
+    Nodes without a valid location are skipped.
+    Duplicate nodes (same name + rounded coords) from submitted+discovered are deduplicated.
+    """
+    seen: set[tuple[str, float, float]] = set()
+    normalized: list[dict[str, Any]] = []
+
+    for node in raw_nodes:
+        if not isinstance(node, dict):
+            continue
+
+        # Must have a valid location
+        coords = _parse_reticulum_location(node.get("location"))
+        if coords is None:
+            continue
+        lat, lon = coords
+
+        # Name — skip unnamed nodes
+        name = str(node.get("name") or "").strip()
+        if not name:
+            continue
+
+        # Deduplicate: same name + position (rounded to 4dp ≈ 11m precision)
+        dedup_key = (name, round(lat, 4), round(lon, 4))
+        if dedup_key in seen:
+            continue
+        seen.add(dedup_key)
+
+        # Build description from node type + LoRa radio params
+        desc_parts: list[str] = []
+        type_name = node.get("typeName") or node.get("type_name") or ""
+        if type_name:
+            desc_parts.append(f"Type: {type_name}")
+
+        freq = node.get("frequencyHuman") or node.get("frequency_human") or ""
+        bw = node.get("bandwidthHuman") or node.get("bandwidth_human") or ""
+        sf = node.get("spreadingFactor") or node.get("spreading_factor")
+        cr = node.get("codingRate") or node.get("coding_rate") or ""
+
+        if freq:
+            desc_parts.append(f"Freq: {freq}")
+        if bw:
+            desc_parts.append(f"BW: {bw}")
+        if sf:
+            desc_parts.append(f"SF: {sf}")
+        if cr:
+            desc_parts.append(f"CR: {cr}")
+
+        description = ", ".join(desc_parts) if desc_parts else ""
+
+        normalized.append(
+            {
+                "name": name,
+                "lat": round(lat, 6),
+                "lon": round(lon, 6),
+                "description": description,
+            }
+        )
+
+    return normalized
+
+
 @router.get("/import/internet-map/ping")
 async def ping_internet_map() -> dict[str, bool]:
     """Fast connectivity probe — HEAD request to map.meshcore.dev with a 3s timeout.
@@ -124,12 +229,12 @@ async def ping_internet_map() -> dict[str, bool]:
 
 @router.get("/import/internet-map")
 async def fetch_internet_map_nodes(
-    source: str = Query(default="meshcore", description="Map source: 'meshcore'"),
+    source: str = Query(default="meshcore", description="Map source: 'meshcore' or 'reticulum'"),
 ) -> dict[str, Any]:
     """Proxy endpoint — fetch nodes from a public mesh network map and normalize them.
 
     Args:
-        source: Which map to fetch from. Currently supports 'meshcore'.
+        source: Which map to fetch from. Supported: 'meshcore', 'reticulum'.
 
     Returns:
         JSON: {"source": str, "nodes": [...], "count": int}
@@ -138,9 +243,19 @@ async def fetch_internet_map_nodes(
         HTTPException 400: Unknown source
         HTTPException 503: Upstream fetch failed
     """
-    if source != "meshcore":
-        raise HTTPException(status_code=400, detail=f"Unknown source: '{source}'. Supported: 'meshcore'")
+    if source == "meshcore":
+        return await _fetch_meshcore()
+    elif source == "reticulum":
+        return await _fetch_reticulum()
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown source: '{source}'. Supported: 'meshcore', 'reticulum'",
+        )
 
+
+async def _fetch_meshcore() -> dict[str, Any]:
+    """Fetch and normalize nodes from the MeshCore map (map.meshcore.dev)."""
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.get(
@@ -180,18 +295,70 @@ async def fetch_internet_map_nodes(
         )
 
     if not isinstance(raw_nodes, list):
-        # Sometimes the response is a dict with a nodes key
         if isinstance(raw_nodes, dict):
             raw_nodes = raw_nodes.get("nodes") or raw_nodes.get("data") or []
         else:
             raw_nodes = []
 
     nodes = _normalize_meshcore_nodes(raw_nodes)
+    logger.info(
+        "MeshCore import: fetched %d raw nodes, normalized %d with coordinates",
+        len(raw_nodes), len(nodes),
+    )
+    return {"source": "meshcore", "nodes": nodes, "count": len(nodes)}
 
-    logger.info("MeshCore import: fetched %d raw nodes, normalized %d with coordinates", len(raw_nodes), len(nodes))
 
-    return {
-        "source": "meshcore",
-        "nodes": nodes,
-        "count": len(nodes),
-    }
+async def _fetch_reticulum() -> dict[str, Any]:
+    """Fetch and normalize nodes from directory.rns.recipes (submitted + discovered)."""
+    all_raw: list[Any] = []
+
+    for url in (RETICULUM_SUBMITTED_URL, RETICULUM_DISCOVERED_URL):
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(
+                    url,
+                    headers=_RETICULUM_FETCH_HEADERS,
+                    follow_redirects=True,
+                )
+                response.raise_for_status()
+                data = response.json()
+        except httpx.TimeoutException:
+            logger.warning("Reticulum directory timed out fetching %s", url)
+            raise HTTPException(
+                status_code=503,
+                detail="Reticulum directory timed out. Please try again.",
+            )
+        except httpx.HTTPStatusError as exc:
+            logger.warning("Reticulum directory returned HTTP %d for %s", exc.response.status_code, url)
+            raise HTTPException(
+                status_code=503,
+                detail=f"Reticulum directory returned HTTP {exc.response.status_code}.",
+            )
+        except httpx.RequestError as exc:
+            logger.warning("Reticulum directory request error: %s", exc)
+            raise HTTPException(
+                status_code=503,
+                detail="Could not reach Reticulum directory. Check internet connectivity.",
+            )
+        except Exception as exc:
+            logger.error("Reticulum directory JSON decode error: %s", exc)
+            raise HTTPException(
+                status_code=503,
+                detail="Reticulum directory returned unreadable data.",
+            )
+
+        # Both endpoints return {"data": [...]}
+        if isinstance(data, dict):
+            entries = data.get("data") or data.get("nodes") or []
+        elif isinstance(data, list):
+            entries = data
+        else:
+            entries = []
+        all_raw.extend(entries)
+
+    nodes = _normalize_reticulum_nodes(all_raw)
+    logger.info(
+        "Reticulum import: fetched %d raw records, normalized %d with coordinates",
+        len(all_raw), len(nodes),
+    )
+    return {"source": "reticulum", "nodes": nodes, "count": len(nodes)}

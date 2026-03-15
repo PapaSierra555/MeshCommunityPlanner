@@ -703,13 +703,6 @@
   line-height: 1.35;
 }
 
-.moretools-coming-soon {
-  font-size: 0.8rem;
-  color: #5d6d7e;
-  padding: 0.5rem 0.25rem;
-  font-style: italic;
-}
-
 /* ---- Inline protocol icons in Tools dropdown ---- */
 
 .toolbar-dropdown-protocol-icons {
