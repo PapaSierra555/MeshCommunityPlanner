@@ -381,6 +381,70 @@ describe('InternetMapImportModal', () => {
     });
   });
 
+  // ---- Bulk warning text content ----
+
+  describe('bulk import warning — text and button labels', () => {
+    const BULK_NODES = Array.from({ length: 6 }, (_, i) => ({
+      name: `Node${i + 1}`,
+      lat: 25 + i * 0.1,
+      lon: -80 - i * 0.1,
+      description: '',
+    }));
+
+    beforeEach(() => {
+      vi.stubGlobal('fetch', makeFetchOk(BULK_NODES));
+    });
+
+    async function openBulkWarning() {
+      render(<InternetMapImportModal {...defaultProps} />);
+      await clickFetchAndWaitForPreview();
+      fireEvent.click(screen.getByRole('button', { name: /import 6 selected/i }));
+      await waitFor(() => screen.getByRole('alert'));
+    }
+
+    it('warning text mentions the exact node count', async () => {
+      await openBulkWarning();
+      expect(screen.getByText(/importing 6 nodes/i)).toBeTruthy();
+    });
+
+    it('warning has a confirm button labelled "Import 6 nodes"', async () => {
+      await openBulkWarning();
+      expect(screen.getByRole('button', { name: /import 6 nodes/i })).toBeTruthy();
+    });
+
+    it('warning has a cancel button labelled "Cancel"', async () => {
+      await openBulkWarning();
+      expect(screen.getByRole('button', { name: /^cancel$/i })).toBeTruthy();
+    });
+
+    it('warning role="alert" is present', async () => {
+      await openBulkWarning();
+      expect(screen.getByRole('alert')).toBeTruthy();
+    });
+  });
+
+  // ---- Modal title icon ----
+
+  describe('modal title branding', () => {
+    it('title contains an img element (MeshCore icon)', () => {
+      vi.stubGlobal('fetch', makeFetchOk());
+      render(<InternetMapImportModal {...defaultProps} />);
+      const title = document.querySelector('.imim-title');
+      expect(title).not.toBeNull();
+      const icon = title!.querySelector('img');
+      expect(icon).not.toBeNull();
+    });
+
+    it('title icon has an alt attribute for accessibility', () => {
+      vi.stubGlobal('fetch', makeFetchOk());
+      render(<InternetMapImportModal {...defaultProps} />);
+      const icon = document.querySelector('.imim-title img') as HTMLImageElement;
+      // alt can be empty string (decorative) or descriptive — must be present
+      expect(icon).not.toBeNull();
+      expect(icon.hasAttribute('alt')).toBe(true);
+    });
+  });
+
   // ---- Accessibility ----
 
   describe('accessibility', () => {
