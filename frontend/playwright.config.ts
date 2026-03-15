@@ -17,8 +17,8 @@ export default defineConfig({
   /* Fail the build on CI if you accidentally left test.only in the source code */
   forbidOnly: !!process.env.CI,
 
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  /* Retry on CI (2x) and locally (1x) to absorb server-start race conditions */
+  retries: process.env.CI ? 2 : 1,
 
   /* Opt out of parallel tests on CI */
   workers: process.env.CI ? 1 : undefined,
@@ -47,7 +47,19 @@ export default defineConfig({
 
     {
       name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
+      use: {
+        ...devices['Desktop Firefox'],
+        launchOptions: {
+          firefoxUserPrefs: {
+            // Disable session-restore to prevent _maybeDontRestoreTabs protocol
+            // crash that occurs when Firefox tries to restore windows during
+            // parallel test teardown.
+            'browser.sessionstore.resume_from_crash': false,
+            'browser.sessionstore.max_tabs_undo': 0,
+            'browser.sessionstore.max_windows_undo': 0,
+          },
+        },
+      },
     },
 
     {
