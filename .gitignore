@@ -68,6 +68,7 @@ release-assets-backup/
 *.png
 !branding/**/*.png
 !backend/app/static/icons/*.png
+!docs/screenshots/*.png
 
 # Commit message staging
 .commitmsg
