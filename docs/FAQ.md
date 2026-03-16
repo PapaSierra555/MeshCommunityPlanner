@@ -24,6 +24,8 @@ No. The downloadable installers are self-contained. Python and Node.js are only 
 
 An internet connection is needed for the initial download of map tiles and terrain elevation data. After that, the app works fully offline using cached data.
 
+The **Import Nodes (Internet)** feature (Plan menu) pulls live node locations from MeshCore Map and Reticulum Network directories — this requires connectivity and is automatically disabled when the app detects you are offline. All other features, including propagation analysis and LOS, work fully offline once terrain data is cached.
+
 ### Does it collect any data or telemetry?
 
 No. There is no analytics, no telemetry, no user accounts, and no cloud services. All data stays on your machine.
@@ -36,9 +38,9 @@ No. There is no analytics, no telemetry, no user accounts, and no cloud services
 
 Download the installer for your platform from the [GitHub Releases page](https://github.com/PapaSierra555/MeshCommunityPlanner/releases):
 
-- **Windows:** Run `MeshCommunityPlanner-1.2.0-Setup.exe`
-- **macOS:** Open `MeshCommunityPlanner-1.2.0.dmg` and drag to Applications
-- **Linux:** Make `MeshCommunityPlanner-1.2.0-x86_64.AppImage` executable and run it
+- **Windows:** Run `MeshCommunityPlanner-1.3.2-Setup.exe`
+- **macOS:** Open `MeshCommunityPlanner-1.3.2.dmg` and drag to Applications
+- **Linux:** Make `MeshCommunityPlanner-1.3.2-x86_64.AppImage` executable and run it
 
 ### macOS says the app is from an unidentified developer. What do I do?
 
@@ -84,6 +86,15 @@ Click **Add Node** (or press `Insert`), then click on the map where you want the
 3. Select your CSV file
 4. Review the column mapping and click **Import Nodes**
 
+### How do I import nodes from a live mesh network directory?
+
+1. Open the **Plan** menu
+2. Click **Import Nodes (Internet)** — this option is disabled (and labeled "offline") if no internet is detected
+3. Choose your source: **MeshCore Map** (meshcore.nz) or **Reticulum Network** (directory.rns.recipes)
+4. Nodes visible in the current map view are listed with their locations
+5. A warning appears when importing more than 5 nodes at once
+6. Click **Import** to add them to your plan
+
 ### How do I import nodes from a JSON file?
 
 1. Export your nodes from "Antenna Coverage" under Liam Cottle's "Antenna Coverage" tool within the [MeshCore app](https://app.meshcore.nz/)
@@ -119,6 +130,23 @@ Click **BOM** in the toolbar. The BOM table shows all hardware needed for your p
 - **Templates:** `.meshtemplate`
 - **Import:** CSV, `.meshplan`
 - **Export:** CSV, PDF, KML, `.meshplan`, `.meshnode`, `.meshtemplate`
+
+### What does "Radio Horizon" mean in the node details panel?
+
+The radio horizon is the theoretical maximum distance Earth's curvature allows at a given antenna height, even with no terrain obstacles. It's calculated as d (km) ≈ 3.57 × √h where h is antenna height in meters.
+
+For example, at 3m antenna height the horizon is ~6 km. At 10m it's ~11 km. This is an upper bound — terrain, Fresnel zone obstructions, and receiver sensitivity will further limit real-world range.
+
+### I exported a KML file — how do I open it in ATAK or another field app?
+
+After the KML file downloads, the app shows a guide with import steps for 10 compatible apps:
+
+- **ATAK CIV / iTAK / WinTAK:** Import Manager → Local SD → select the .kml file
+- **Caltopo:** Import → KML/KMZ
+- **Gaia GPS:** Tap + → Import file
+- **OsmAnd:** Menu → My Places → Import
+- **Google Earth:** Drag and drop the file onto the map
+- **QGIS:** Layer → Add Layer → Add Vector Layer
 
 ### The elevation heatmap looks like one solid color in my area. How do I fix it?
 
@@ -216,5 +244,5 @@ For more troubleshooting help, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ---
 
-**Last Updated:** February 2026
-**Version:** 1.2.0
+**Last Updated:** March 2026
+**Version:** 1.3.2

@@ -386,6 +386,24 @@
 
 ## R
 
+### Radio Horizon
+**Definition:** The maximum distance a radio signal can travel before Earth's curvature cuts off line-of-sight, even in the absence of terrain obstacles. Shown in each node's detail panel as a function of antenna height.
+
+**Formula:** d (km) ≈ 3.57 × √h, where h is antenna height in meters. The effective radio horizon between two nodes is the sum of each node's individual horizon distance.
+
+**Example Values:**
+- 1m antenna height → ~3.6 km horizon
+- 3m → ~6.2 km
+- 10m → ~11.3 km
+- 30m → ~19.5 km
+- 100m → ~35.7 km
+
+**Key Concept:** The radio horizon is a theoretical upper bound. Real-world range is further limited by terrain obstructions, Fresnel zone clearance, and receiver sensitivity. Coverage analysis accounts for terrain and will show a tighter limit in hilly areas.
+
+**Related:** Antenna Height, Line-of-Sight, Fresnel Zone
+
+---
+
 ### Relay Node
 **Definition:** An intermediate node that receives signals from other nodes and retransmits them, extending network range and providing redundancy.
 

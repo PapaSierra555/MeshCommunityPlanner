@@ -639,7 +639,7 @@ export function Toolbar({
           </div>
         </div>
         <nav className="toolbar-actions">
-          <span className="toolbar-version">v1.2.0</span>
+          <span className="toolbar-version">v1.3.2</span>
           <button
             className="toolbar-exit-btn"
             type="button"
@@ -658,7 +658,7 @@ export function Toolbar({
             <div className="appinfo-modal-header">
               <div>
                 <div className="appinfo-title">Mesh Community Planner</div>
-                <div className="appinfo-version">Version 1.2.0</div>
+                <div className="appinfo-version">Version 1.3.2</div>
               </div>
               <button className="appinfo-close" type="button" onClick={() => setOpenMenu(null)} title="Close">&times;</button>
             </div>
@@ -694,7 +694,8 @@ export function Toolbar({
                       <li><strong>Interactive Map &amp; Node Placement</strong> &mdash; Place nodes on a real map around community centers, shelters, key intersections</li>
                       <li><strong>Line-of-Sight &amp; Coverage Analysis</strong> &mdash; See which nodes can communicate before buying anything; identify gaps</li>
                       <li><strong>CSV Import &amp; Export</strong> &mdash; Bring in locations from a spreadsheet; share plans with volunteers and stakeholders</li>
-                      <li><strong>KML Export for Mapping</strong> &mdash; Export to Google Earth for grant applications, community presentations, government coordination</li>
+                      <li><strong>Internet Map Import</strong> &mdash; Pull live node locations directly from MeshCore Map or Reticulum Network directories; automatically disabled when offline</li>
+                      <li><strong>KML Export for Mapping</strong> &mdash; Export to KML and use the built-in app guide to import into ATAK, Caltopo, Gaia GPS, Google Earth, QGIS, and more</li>
                       <li><strong>Channel Capacity Estimator</strong> &mdash; Understand device limits before congestion; plan for community growth</li>
                       <li><strong>LoRa Airtime Calculator</strong> &mdash; Estimate message timing and battery life for solar/battery nodes in remote locations</li>
                       <li><strong>Bill of Materials &amp; Cost Estimation</strong> &mdash; Shopping list with costs for budgeting, grant writing, procurement</li>
@@ -838,15 +839,21 @@ export function Toolbar({
                 {expandedHelpSections.has('importexport') && (
                   <div className="appinfo-section-body">
                     <p className="appinfo-text">
-                      CSV export includes all node configuration fields; re-importing a CSV preserves exact
+                      <strong>Internet Map Import</strong> &mdash; Plan menu &rarr; Import Nodes (Internet) connects to the
+                      MeshCore Map or Reticulum Network directory and pulls live node locations directly into your plan.
+                      The button is automatically disabled (and labeled &ldquo;offline&rdquo;) when no internet connection
+                      is detected. A warning appears when importing more than 5 nodes at once.
+                    </p>
+                    <p className="appinfo-text">
+                      <strong>CSV</strong> &mdash; Export includes all node configuration fields; re-importing a CSV preserves exact
                       settings for each node. CSV import auto-fills missing fields from the plan&apos;s current
                       radio defaults &mdash; verify critical settings (frequency, TX power, modem preset) after
                       importing.
                     </p>
                     <p className="appinfo-text">
-                      KML export is for visualization only; KML files cannot be re-imported into the planner.
-                      Coordinate accuracy depends on the source data; GPS coordinates should use the WGS84 datum
-                      (standard for most consumer GPS devices and mapping services).
+                      <strong>KML</strong> &mdash; After exporting a .kml file, a guide lists compatible apps and import steps:
+                      ATAK CIV/iTAK/WinTAK, Caltopo, Gaia GPS, OsmAnd, Avenza Maps, OruxMaps (mobile) and
+                      Google Earth, QGIS, ArcGIS, Google My Maps (desktop). KML files cannot be re-imported into the planner.
                     </p>
                   </div>
                 )}

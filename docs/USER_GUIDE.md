@@ -1,7 +1,7 @@
 # Mesh Community Planner — User Guide
 
-**Version:** 1.2.0
-**Last Updated:** February 2026
+**Version:** 1.3.2
+**Last Updated:** March 2026
 
 ---
 
@@ -688,9 +688,30 @@ The native plan format stores your complete network design as a JSON file with a
 
 **Import:** Plan menu → **Import Nodes (CSV)** adds nodes from a CSV file. Required columns: `name`, `latitude`, `longitude`. Optional columns are auto-detected.
 
-### KML — Google Earth
+### Internet Map Import
 
-Plan menu → **Export Plan (KML)** creates a `.kml` file you can open in Google Earth, ArcGIS, QGIS, or any GIS application. Useful for visualizing your network overlaid on satellite imagery.
+Pull live node locations directly from an online mesh network directory:
+
+1. Open the **Plan** menu
+2. Click **Import Nodes (Internet)**
+3. In the dialog, choose your source:
+   - **MeshCore Map** — nodes registered at meshcore.nz
+   - **Reticulum Network** — nodes from the directory.rns.recipes public directory
+4. The map zooms to show available nodes in the current map view
+5. A warning appears if more than 5 nodes will be imported at once
+6. Click **Import** to add the nodes to your plan
+
+**Offline guard:** The button is automatically disabled and labeled "(offline)" when no internet connection is detected. Map tiles and terrain analysis continue to work offline — only the live directory import requires connectivity.
+
+### KML — Google Earth / Field Apps
+
+Plan menu → **Export Plan (KML)** creates a `.kml` file and opens a guide with import instructions for compatible apps:
+
+**Mobile:** ATAK CIV / iTAK / WinTAK, Caltopo, Gaia GPS, OsmAnd, Avenza Maps, OruxMaps
+
+**Desktop:** Google Earth, QGIS, ArcGIS, Google My Maps
+
+KML files cannot be re-imported into the planner — they are for visualization and field reference only.
 
 ### GeoJSON — Web GIS
 
@@ -860,5 +881,5 @@ For common issues, see [Troubleshooting](TROUBLESHOOTING.md).
 For technical terms, see the [Technical Glossary](TECHNICAL-GLOSSARY.md).
 For answers to common questions, see the [FAQ](FAQ.md).
 
-*Last Updated: February 2026*
-*Version: 1.2.0*
+*Last Updated: March 2026*
+*Version: 1.3.2*
