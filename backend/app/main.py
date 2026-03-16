@@ -370,6 +370,7 @@ if __name__ == "__main__":
     # Without this, logging.getLogger(__name__) loggers have no handlers
     # and messages below WARNING are silently dropped
     import logging as _logging
+    get_data_dir().mkdir(parents=True, exist_ok=True)
     _log_file = get_data_dir() / "server.log"
     _logging.basicConfig(
         level=_logging.INFO,
