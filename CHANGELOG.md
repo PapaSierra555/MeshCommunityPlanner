@@ -10,25 +10,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+#### Internet Map Import — Dual Source (MeshCore + Reticulum)
+- **Reticulum Network** added as a second live source alongside MeshCore Map in the Import Nodes (Internet) dialog
+- Source cards use `aria-pressed` keyboard navigation; both show a **LIVE** badge; modal title updates dynamically to the selected source
+- Reticulum pulls from `directory.rns.recipes` — deduplicates by (name, lat, lon rounded to 4dp), filters null-island (0,0) nodes
+- Same 5-node bulk-import warning threshold applies to both sources
+
+#### Offline Guard
+- Import Nodes (Internet) button automatically disables and labels itself **(offline)** when no internet connection is detected at startup or on network change
+- All other features (propagation, LOS, BOM, CSV, KML) continue to work fully offline
+
+#### KML Export Help Dialog
+- After a .kml file downloads, a modal lists compatible apps with per-app import instructions:
+  - **Mobile:** ATAK CIV / iTAK / WinTAK, Caltopo, Gaia GPS, OsmAnd, Avenza Maps, OruxMaps
+  - **Desktop:** Google Earth, QGIS, ArcGIS, Google My Maps
+
 #### Post-Deployment Signal Validation — Import Signal Data (CSV)
 - **Import Signal Data (CSV)** in the Plan menu — import real-world RSSI/SNR link observations and compare them against modeled predictions
 - Accepts CSV exports from Meshtastic, MeshCore, or any tool producing node-pair signal data; auto-detects column names (`from`/`to`, `node_a`/`node_b`, `rssi`, `snr`, `timestamp`)
-- Two-phase modal: Phase 1 drag-and-drop or file upload with parse summary (rows parsed, rows skipped, skip reasons); Phase 2 link table with plan node match status and RSSI color coding (green >-85 dBm, yellow -85 to -100 dBm, red <-100 dBm)
-- Matched links are imported as a Signal overlay on the map — colored polylines connect node pairs, hover tooltips show observed RSSI/SNR
-- Unmatched node names shown in gray; at least one matched pair required to enable import
-- Backend validates RSSI (-140 to 0 dBm) and SNR (-20 to +20 dB), truncates at 500 rows, returns skip reasons for out-of-range or malformed rows
+- Two-phase modal: Phase 1 file upload with parse summary (rows parsed, rows skipped, skip reasons); Phase 2 link table with plan node match status and RSSI color coding (green >-85 dBm, yellow -85 to -100 dBm, red <-100 dBm)
+- Matched links imported as a Signal overlay — colored polylines, hover tooltips with observed RSSI/SNR
+- Backend validates RSSI (-140 to 0 dBm) and SNR (-20 to +20 dB), truncates at 500 rows
+
+#### GitHub Actions Release Workflow
+- `.github/workflows/release.yml` — push a `v*` tag to trigger parallel platform builds:
+  - **macOS** (`macos-14`, Apple Silicon) — PyInstaller `.app` bundle → `create-dmg` DMG with drag-to-Applications window
+  - **Linux** (`ubuntu-22.04`) — PyInstaller output → `appimagetool` AppImage with widest glibc compatibility
+  - **Windows** (`windows-latest`) — PyInstaller EXE directory zipped
+- Draft GitHub Release auto-created with generated release notes; stays draft until manually published
+- `APP_VERSION` env var plumbed through `build_dmg.sh` and `build_appimage.sh` so artifact filenames match the tag
 
 ### Fixed
-- **ATAK KML feed** — `GET /api/atak/local-url` was returning port 8000 and missing `/api/` path prefix; icon URLs in the KML document also used hardcoded port 8000. Now uses `get_port()` throughout so the URL is always correct regardless of port configuration
+- **SQLite WAL corruption** — force-killing the process (`taskkill /F`, power loss) skipped the WAL checkpoint, leaving the DB in an unrecoverable state on next launch. Backend now enforces WAL journaling mode, runs `PRAGMA wal_checkpoint(TRUNCATE)` on startup, and auto-restores sample plans if the DB is found empty after a dirty exit
+- **Firefox Playwright crashes** — parallel test teardown triggered `_maybeDontRestoreTabs` protocol error in Firefox. Fixed with `firefoxUserPrefs` disabling session-restore in `playwright.config.ts`
 - **RNS Transport Advisor** — removed `clientCount` input that was collected but never used in any calculation
-- **RNS Throughput Analyzer** — removed `hops` field per interface segment that was collected but never factored into bottleneck or timing calculations
+- **RNS Throughput Analyzer** — removed `hops` field per interface segment that was never factored into bottleneck or timing calculations
 
 ### Removed
-- **Static CoT/TAK export** — the live ATAK KML endpoint (`GET /api/atak/nodes.kml`) is the correct integration story; the static one-time CoT XML export was redundant, immediately stale, and sent the wrong message about how to use ATAK integration
+- **Live ATAK KML feed** — `GET /api/atak/nodes.kml`, `GET /api/atak/local-url`, the ATAKUrlPanel sidebar widget, and all bundled static KML icons (`mesh_node.png`, `repeater.png`, `gateway.png`). Play Store ATAK 5.6 disables cleartext HTTP at the Android system level; requiring users to install a self-signed certificate is not acceptable UX. Static KML export with the new app guide is the correct story for 100% of users.
+- **Dead code** — unimported `App.css` (Vite boilerplate), orphaned `BOMTable.tsx` scaffold, duplicate `bom/PropagationProgress.tsx`, dead `.moretools-coming-soon` CSS class
 
 ### Tests
-- Frontend: 383 passing (Vitest + Testing Library + jest-axe)
-- Backend: 173 passing (pytest)
+- Frontend: 437 passing — 19 test files (Vitest + Testing Library + jest-axe)
+- Backend: 199 passing (pytest)
 
 ---
 
