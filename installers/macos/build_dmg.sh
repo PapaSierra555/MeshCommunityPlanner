@@ -5,7 +5,8 @@
 #   - PyInstaller .app bundle in dist/Mesh Community Planner.app/
 #     (built by: python3 -m PyInstaller installers/mesh_planner.spec --noconfirm)
 #
-# Output: installers/dist/MeshCommunityPlanner-1.2.0.dmg
+# Output: installers/dist/MeshCommunityPlanner-<version>.dmg
+#         Set APP_VERSION env var to override default (e.g. from CI).
 
 set -euo pipefail
 
@@ -14,7 +15,7 @@ INSTALLERS_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$INSTALLERS_DIR")"
 
 APP_NAME="Mesh Community Planner"
-APP_VERSION="1.2.0"
+APP_VERSION="${APP_VERSION:-1.3.2}"
 APP_BUNDLE="${APP_NAME}.app"
 DMG_NAME="MeshCommunityPlanner-${APP_VERSION}.dmg"
 

@@ -5,7 +5,8 @@
 #   - PyInstaller output in dist/MeshCommunityPlanner/
 #   - appimagetool (https://github.com/AppImage/AppImageKit)
 #
-# Output: dist/MeshCommunityPlanner-1.2.0-x86_64.AppImage
+# Output: dist/MeshCommunityPlanner-<version>-x86_64.AppImage
+#         Set APP_VERSION env var to override default (e.g. from CI).
 
 set -euo pipefail
 
@@ -14,7 +15,7 @@ INSTALLERS_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$INSTALLERS_DIR")"
 
 APP_NAME="MeshCommunityPlanner"
-APP_VERSION="1.2.0"
+APP_VERSION="${APP_VERSION:-1.3.2}"
 PYINSTALLER_DIST="${PROJECT_ROOT}/dist/MeshCommunityPlanner"
 APPDIR="${PROJECT_ROOT}/dist/${APP_NAME}.AppDir"
 

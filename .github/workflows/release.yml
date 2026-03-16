@@ -1,0 +1,173 @@
+name: Build Release Artifacts
+
+# Triggers:
+#   - Push a version tag (v1.3.2) → builds all platforms + creates draft GitHub Release
+#   - Manual workflow_dispatch → builds all platforms, uploads artifacts (no release created)
+on:
+  push:
+    tags:
+      - 'v[0-9]*'
+  workflow_dispatch:
+
+jobs:
+  # ── macOS DMG ─────────────────────────────────────────────────────────────
+  build-macos:
+    name: macOS DMG (Apple Silicon)
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm ci && npx vite build
+
+      - name: Build PyInstaller bundle
+        run: python3 -m PyInstaller installers/mesh_planner.spec --noconfirm
+
+      - name: Install create-dmg
+        run: brew install create-dmg
+
+      - name: Build DMG
+        env:
+          APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}
+        run: |
+          VERSION="${APP_VERSION#v}"
+          export APP_VERSION="$VERSION"
+          bash installers/macos/build_dmg.sh
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: installers/dist/*.dmg
+          if-no-files-found: error
+
+  # ── Linux AppImage ─────────────────────────────────────────────────────────
+  build-linux:
+    name: Linux AppImage (x86_64)
+    # Pin to 22.04 — appimagetool embeds a runtime glibc; 22.04 gives the
+    # widest compatibility with older distros.
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 fuse
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm ci && npx vite build
+
+      - name: Build PyInstaller bundle
+        run: python3 -m PyInstaller installers/mesh_planner.spec --noconfirm
+
+      - name: Install appimagetool
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool-x86_64.AppImage
+          sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
+
+      - name: Build AppImage
+        env:
+          APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}
+        run: |
+          VERSION="${APP_VERSION#v}"
+          export APP_VERSION="$VERSION"
+          bash installers/linux/build_appimage.sh
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-appimage
+          path: dist/*.AppImage
+          if-no-files-found: error
+
+  # ── Windows EXE zip ────────────────────────────────────────────────────────
+  build-windows:
+    name: Windows EXE (x64)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build frontend
+        working-directory: frontend
+        shell: bash
+        run: npm ci && npx vite build
+
+      - name: Build PyInstaller bundle
+        run: python -m PyInstaller installers/mesh_planner.spec --noconfirm
+
+      - name: Zip Windows build
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $version = if ($tag -match '^v') { $tag.TrimStart('v') } else { 'dev' }
+          Compress-Archive -Path dist\MeshCommunityPlanner -DestinationPath "dist\MeshCommunityPlanner-${version}-win.zip"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: dist/*.zip
+          if-no-files-found: error
+
+  # ── Draft GitHub Release ───────────────────────────────────────────────────
+  release:
+    name: Create Draft Release
+    needs: [build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    # Only run on real version tags — not on manual workflow_dispatch
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find artifacts -type f | sort
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: artifacts/**/*
