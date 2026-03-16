@@ -61,11 +61,6 @@ sample_plans_dir = PROJECT_ROOT / "test_plans"
 if sample_plans_dir.is_dir():
     datas.append((str(sample_plans_dir / "*.meshplan.json"), "sample_plans"))
 
-# ATAK KML static icons (mesh_node.png, repeater.png, gateway.png)
-static_icons_dir = PROJECT_ROOT / "backend" / "app" / "static" / "icons"
-if static_icons_dir.is_dir():
-    datas.append((str(static_icons_dir), "backend/app/static/icons"))
-
 # Hidden imports that PyInstaller may not detect via static analysis
 hiddenimports = [
     "uvicorn",
@@ -103,7 +98,6 @@ hiddenimports = [
     "backend.app.api.nodes",
     "backend.app.api.catalog",
     "backend.app.api.error_handlers",
-    "backend.app.api.atak",
     # Engine router + handlers
     "backend.app.api.router",
     "backend.app.api.models",
