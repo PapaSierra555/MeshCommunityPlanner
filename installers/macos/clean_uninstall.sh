@@ -38,8 +38,9 @@ hdiutil detach "/Volumes/Mesh Community Planner" 2>/dev/null || true
 echo "[3/6] Removing application logs..."
 rm -rf ~/Library/Logs/MeshCommunityPlanner.log
 
-# 4. Remove local data directory
-echo "[4/6] Removing local data directory..."
+# 4. Remove local data directories (macOS and Linux paths)
+echo "[4/6] Removing local data directories..."
+rm -rf ~/Library/"Application Support"/MeshCommunityPlanner
 rm -rf ~/.local/share/MeshCommunityPlanner
 
 # 5. Remove source repo clone (default location)
@@ -60,6 +61,11 @@ fi
 if ls ~/Library/Logs/ 2>/dev/null | grep -qi mesh; then
     echo "  [WARN] Found leftover logs:"
     ls ~/Library/Logs/ | grep -i mesh
+    CLEAN=false
+fi
+
+if [ -d ~/Library/"Application Support"/MeshCommunityPlanner ]; then
+    echo "  [WARN] Data directory still exists: ~/Library/Application Support/MeshCommunityPlanner"
     CLEAN=false
 fi
 
