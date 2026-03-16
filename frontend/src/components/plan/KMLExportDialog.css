@@ -1,0 +1,134 @@
+.kml-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.kml-dialog {
+  background: #1a2a3a;
+  border: 1px solid #2c4a6a;
+  border-radius: 8px;
+  width: min(640px, 95vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.kml-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.1rem 0.75rem;
+  border-bottom: 1px solid #2c4a6a;
+}
+
+.kml-dialog-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #7fb3f0;
+}
+
+.kml-dialog-close {
+  background: none;
+  border: none;
+  color: #7f8c8d;
+  font-size: 1.3rem;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  line-height: 1;
+}
+.kml-dialog-close:hover { color: #ecf0f1; }
+
+.kml-dialog-body {
+  padding: 1rem 1.1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.kml-dialog-summary {
+  font-size: 0.88rem;
+  color: #bdc3c7;
+  margin: 0 0 1rem 0;
+  line-height: 1.5;
+}
+
+.kml-dialog-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 480px) {
+  .kml-dialog-columns { grid-template-columns: 1fr; }
+}
+
+.kml-dialog-col-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #7fb3f0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.5rem 0;
+}
+
+.kml-dialog-app-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.kml-dialog-app-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.kml-app-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #ecf0f1;
+}
+
+.kml-app-how {
+  font-size: 0.74rem;
+  color: #7f8c8d;
+  line-height: 1.4;
+}
+
+.kml-dialog-tip {
+  font-size: 0.78rem;
+  color: #7f8c8d;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  background: #0d1b2a;
+  border-radius: 4px;
+  border-left: 3px solid #2c4a6a;
+  line-height: 1.5;
+}
+
+.kml-dialog-footer {
+  padding: 0.75rem 1.1rem;
+  border-top: 1px solid #2c4a6a;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.kml-dialog-btn {
+  background: #2c4a6a;
+  color: #ecf0f1;
+  border: 1px solid #3d6a96;
+  border-radius: 4px;
+  padding: 0.45rem 1.4rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.kml-dialog-btn:hover { background: #3d6a96; }

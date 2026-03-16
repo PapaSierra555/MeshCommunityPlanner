@@ -43,7 +43,7 @@ import { NumberInput } from '../common/NumberInput';
 import { WelcomeTour } from '../onboarding/WelcomeTour';
 import { InternetMapImportModal } from '../plan/InternetMapImportModal';
 import { SignalImportModal } from '../plan/SignalImportModal';
-import { ATAKUrlPanel } from '../plan/ATAKUrlPanel';
+import { KMLExportDialog } from '../plan/KMLExportDialog';
 import './AppLayout.css';
 
 // ============================================================================
@@ -277,6 +277,7 @@ export function AppLayout() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [showPlanList, setShowPlanList] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Ready');
+  const [kmlExportDialog, setKmlExportDialog] = useState<{ nodeCount: number; linkCount: number } | null>(null);
   const [editingPlan, setEditingPlan] = useState(false);
   const [planName, setPlanName] = useState('');
   const [planDesc, setPlanDesc] = useState('');
@@ -1138,8 +1139,7 @@ export function AppLayout() {
       const kmlStr = exportKML(planNodes, currentPlan.name, kmlLinks);
       const blob = new Blob([kmlStr], { type: 'application/vnd.google-earth.kml+xml' });
       triggerDownload(blob, `${sanitizeFilename(currentPlan.name)}.kml`);
-      const linkNote = kmlLinks && kmlLinks.length > 0 ? ` with ${kmlLinks.length} link(s)` : '';
-      setStatusMessage(`Exported ${planNodes.length} node(s) as KML${linkNote}.`);
+      setKmlExportDialog({ nodeCount: planNodes.length, linkCount: kmlLinks?.length ?? 0 });
     } catch (err: any) {
       setErrorMsg(`KML export error: ${err.message}`);
     }
@@ -3048,21 +3048,6 @@ export function AppLayout() {
               )}
             </div>
 
-            {/* ATAK Integration */}
-            <div className="sidebar-section">
-              <details className="horizon-note" style={{ marginTop: '0.25rem' }}>
-                <summary style={{ fontWeight: 600, cursor: 'pointer' }}>ATAK Integration</summary>
-                <div className="horizon-note-body" style={{ marginTop: '0.4rem' }}>
-                  <p className="sidebar-hint" style={{ marginBottom: '0.4rem' }}>
-                    Point ATAK at this URL to display plan nodes as live map placemarks.
-                  </p>
-                  <ATAKUrlPanel planId={currentPlan?.id} />
-                  <p className="sidebar-hint" style={{ marginTop: '0.4rem', marginBottom: 0 }}>
-                    ATAK: Import Manager &rarr; KML Network Link &rarr; paste URL &rarr; refresh 30s
-                  </p>
-                </div>
-              </details>
-            </div>
 
             {/* Network Radio Settings (plan-level, applies to all nodes) */}
             {renderNetworkRadio()}
@@ -3299,6 +3284,13 @@ export function AppLayout() {
         forceTour={catalogTourForce}
         onTourComplete={() => setCatalogTourForce(false)}
       />
+      {kmlExportDialog && (
+        <KMLExportDialog
+          nodeCount={kmlExportDialog.nodeCount}
+          linkCount={kmlExportDialog.linkCount}
+          onClose={() => setKmlExportDialog(null)}
+        />
+      )}
       {errorMsg && <ErrorDialog message={errorMsg} onClose={() => setErrorMsg(null)} />}
       <ConfirmDialog
         isOpen={confirmDialog !== null}
