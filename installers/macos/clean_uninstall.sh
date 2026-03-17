@@ -25,7 +25,9 @@ set -euo pipefail
 echo "=== Mesh Community Planner — macOS Clean Uninstall ==="
 echo ""
 
-# 1. Remove installed app bundles (both naming conventions)
+# 1. Remove installed app bundles
+# DMG installs as MeshCommunityPlanner.app (spaces stripped by build_dmg.sh).
+# Also remove the spaced name in case an older build is present.
 echo "[1/6] Removing application bundles from /Applications..."
 rm -rf /Applications/MeshCommunityPlanner.app
 rm -rf "/Applications/Mesh Community Planner.app"

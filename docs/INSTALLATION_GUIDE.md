@@ -1,7 +1,7 @@
 # Mesh Community Planner -- Build & Installation Guide
 
-**Version:** 1.2.0
-**Date:** 2026-02-18
+**Version:** 1.3.2
+**Date:** 2026-03-17
 
 ---
 
@@ -146,24 +146,55 @@ Output: `dist/MeshCommunityPlanner-1.2.0.dmg`
 
 To install: mount the DMG, drag "Mesh Community Planner" to Applications.
 
-### Gatekeeper (unsigned app warning)
+### ⚠️  IMPORTANT: macOS will block the app on first launch
 
-Since the app is not notarized with Apple, macOS will block it on first launch:
+> **This is expected and is NOT a virus warning.** macOS blocks any app that
+> was not purchased through the App Store or signed with a paid Apple Developer
+> certificate ($99/year). Mesh Community Planner is free, open-source software
+> — we do not pay Apple for a certificate. The app is safe; you can read every
+> line of source code in this repository.
 
-1. Right-click the app in Applications
-2. Select **Open**
-3. Click **Open** in the confirmation dialog
-4. The app is now whitelisted
+#### Why does this happen?
 
-Or via Terminal:
+Apple's **Gatekeeper** feature checks every app for a code-signing certificate
+before allowing it to run. Apps downloaded outside the App Store that are not
+signed show a "Apple cannot verify this app" or "app is damaged" dialog. This
+is a business/policy restriction, not a security finding. The app contains no
+malware, spyware, or network calls outside of what is documented.
+
+#### Option A — Right-click method (no Terminal needed)
+
+1. Open **Finder** and navigate to **Applications**
+2. **Right-click** (or Control-click) `MeshCommunityPlanner`
+3. Select **Open** from the context menu
+4. Click **Open** in the dialog that appears
+5. The app launches. macOS remembers your choice — you only do this once.
+
+#### Option B — Terminal command
+
 ```bash
-xattr -cr "/Applications/Mesh Community Planner.app"
+xattr -cr /Applications/MeshCommunityPlanner.app
 ```
+
+**What this command does:** `xattr` manages extended file attributes on macOS.
+The `-c` flag clears all quarantine attributes (the "downloaded from internet"
+flag that Gatekeeper checks), and `-r` applies it recursively to all files
+inside the bundle. This is the same action macOS itself performs when you
+click "Open" in the right-click dialog — it just does it in one step.
+Running this command does not change, patch, or weaken the app in any way.
+After running it, launch the app normally by double-clicking.
+
+#### Why is this required on older Macs?
+
+On macOS 13 (Ventura) and older, the right-click method sometimes fails to
+show the "Open" option and the "app is damaged" message appears instead. In
+that case, the Terminal command above is the only reliable method. This is a
+known macOS quirk unrelated to the app itself.
 
 ### Optional: Ad-hoc code signing
 
 ```bash
-codesign --force --deep --sign - "dist/Mesh Community Planner.app"
+codesign --force --deep --sign - dist/"Mesh Community Planner.app"
 ```
 
 ### macOS Troubleshooting
@@ -173,7 +204,7 @@ codesign --force --deep --sign - "dist/Mesh Community Planner.app"
 | `pip3: command not found` | `brew install python@3.13` then restart terminal |
 | `node: command not found` | `brew install node` |
 | PyInstaller: `No module named _tkinter` | Ignore -- tkinter is not used |
-| Gatekeeper blocks app | Right-click > Open, or `xattr -cr` (see above) |
+| "app is damaged" or Gatekeeper blocks | See Gatekeeper section above |
 | Port 8321 in use | `lsof -i :8321` then `kill <PID>` |
 
 ---

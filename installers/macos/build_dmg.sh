@@ -72,23 +72,37 @@ rm -f "${DMG_PATH}"
 
 if command -v create-dmg &> /dev/null; then
     echo "[INFO] Using create-dmg..."
+
+    # Generate installer background image (Gatekeeper instructions)
+    BACKGROUND_PY="${SCRIPT_DIR}/create_dmg_background.py"
+    BACKGROUND_PNG="${SCRIPT_DIR}/dmg_background.png"
+    if [ -f "${BACKGROUND_PY}" ]; then
+        echo "[INFO] Generating DMG background..."
+        python3 "${BACKGROUND_PY}"
+    fi
+
     # create-dmg has a bug with spaces in paths;
-    # copy source .app and icon to /tmp to avoid space issues
+    # copy source .app, icon, and background to /tmp to avoid space issues
     TMP_SRC="/tmp/MeshPlannerDmgBuild"
     rm -rf "${TMP_SRC}"
     mkdir -p "${TMP_SRC}"
     cp -R "${PYINSTALLER_APP}" "${TMP_SRC}/MeshCommunityPlanner.app"
+    [ -f "${BACKGROUND_PNG}" ] && cp "${BACKGROUND_PNG}" "${TMP_SRC}/background.png"
 
     VOLUME_ICON="${RESOURCES_DIR}/AppIcon.icns"
+    BACKGROUND_ARG=()
+    [ -f "${TMP_SRC}/background.png" ] && BACKGROUND_ARG=(--background "${TMP_SRC}/background.png")
+
     if [ -f "${VOLUME_ICON}" ]; then
         cp "${VOLUME_ICON}" "${TMP_SRC}/volicon.icns"
         create-dmg \
             --volname "${APP_NAME}" \
             --window-size 600 400 \
             --icon-size 100 \
-            --icon "MeshCommunityPlanner.app" 150 200 \
-            --app-drop-link 450 200 \
+            --icon "MeshCommunityPlanner.app" 140 145 \
+            --app-drop-link 460 145 \
             --volicon "${TMP_SRC}/volicon.icns" \
+            "${BACKGROUND_ARG[@]}" \
             "${DMG_PATH}" \
             "${TMP_SRC}/MeshCommunityPlanner.app"
     else
@@ -96,12 +110,14 @@ if command -v create-dmg &> /dev/null; then
             --volname "${APP_NAME}" \
             --window-size 600 400 \
             --icon-size 100 \
-            --icon "MeshCommunityPlanner.app" 150 200 \
-            --app-drop-link 450 200 \
+            --icon "MeshCommunityPlanner.app" 140 145 \
+            --app-drop-link 460 145 \
+            "${BACKGROUND_ARG[@]}" \
             "${DMG_PATH}" \
             "${TMP_SRC}/MeshCommunityPlanner.app"
     fi
     rm -rf "${TMP_SRC}"
+    [ -f "${BACKGROUND_PNG}" ] && rm -f "${BACKGROUND_PNG}"
 else
     echo "[INFO] create-dmg not found, using hdiutil..."
     STAGING="${INSTALLERS_DIR}/dist/dmg_staging"

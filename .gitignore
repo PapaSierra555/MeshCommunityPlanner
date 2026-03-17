@@ -69,6 +69,8 @@ release-assets-backup/
 !branding/**/*.png
 !backend/app/static/icons/*.png
 !docs/screenshots/*.png
+# DMG background is generated at build time, not tracked
+installers/macos/dmg_background.png
 
 # Commit message staging
 .commitmsg
