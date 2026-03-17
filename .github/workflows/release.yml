@@ -54,6 +54,42 @@ jobs:
           path: installers/dist/*.dmg
           if-no-files-found: error
 
+  # ── macOS DMG (Intel x86_64 via Rosetta on self-hosted M3) ─────────────
+  build-macos-intel:
+    name: macOS DMG (Intel x86_64)
+    runs-on: [self-hosted, macOS, ARM64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install x86_64 Python dependencies (via Rosetta)
+        run: arch -x86_64 /usr/local/bin/pip3.12 install -r requirements.txt pyinstaller
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm ci && npx vite build
+
+      - name: Build PyInstaller bundle (Intel x86_64)
+        run: arch -x86_64 /usr/local/bin/python3.12 -m PyInstaller installers/mesh_planner.spec --noconfirm
+
+      - name: Build DMG
+        env:
+          APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}
+        run: |
+          VERSION="${APP_VERSION#v}"
+          export APP_VERSION="$VERSION"
+          bash installers/macos/build_dmg.sh
+          for f in installers/dist/*.dmg; do
+            mv "$f" "${f%.dmg}-x86_64.dmg"
+          done
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg-x86_64
+          path: installers/dist/*.dmg
+          if-no-files-found: error
+
   # ── Linux AppImage ─────────────────────────────────────────────────────
   build-linux:
     name: Linux AppImage (x86_64)
@@ -150,7 +186,7 @@ jobs:
   # ── Draft GitHub Release ───────────────────────────────────────────────
   release:
     name: Create Draft Release
-    needs: [build-macos-arm, build-linux, build-windows]
+    needs: [build-macos-arm, build-macos-intel, build-linux, build-windows]
     runs-on: ubuntu-latest
     # Only run on real version tags — not on manual workflow_dispatch
     if: startsWith(github.ref, 'refs/tags/v')
