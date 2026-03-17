@@ -152,9 +152,9 @@ To install: mount the DMG, drag "Mesh Community Planner" to Applications.
 
 > **This is expected and is NOT a virus warning.** macOS blocks any app that
 > was not purchased through the App Store or signed with a paid Apple Developer
-> certificate ($99/year). Mesh Community Planner is free, open-source software
-> — we do not pay Apple for a certificate. The app is safe; you can read every
-> line of source code in this repository.
+> certificate ($99/year). Mesh Community Planner is free, non-commercial
+> open-source software. The app is safe; you can read every line of source
+> code in this repository.
 
 #### Why does this happen?
 

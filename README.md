@@ -21,7 +21,7 @@ Download the latest release from the [GitHub Releases page](https://github.com/P
 | Platform | Format | File |
 |----------|--------|------|
 | **Windows** | Portable (.zip) | `MeshCommunityPlanner-1.3.2-win.zip` |
-| **macOS (Apple Silicon)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.2.dmg` |
+| **macOS (Apple Silicon / ARM64, not Intel)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.2.dmg` |
 | **Linux** | AppImage | `MeshCommunityPlanner-1.3.2-x86_64.AppImage` |
 
 All downloads are self-contained — no Python or Node.js installation required.
@@ -42,6 +42,7 @@ All downloads are self-contained — no Python or Node.js installation required.
 - **Power Budgeting** — Battery and solar deployment recommendations per node
 - **Bill of Materials** — Component list with pricing, CSV/PDF export, and deployment cards
 - **Regulatory Presets** — US FCC 915, EU 868, EU 433, ANZ
+- **Internet Map Import** — Pull live node positions from MeshCore Map (`map.meshcore.dev`) and Reticulum Network (`directory.rns.recipes`) directly into your plan; auto-disables when offline
 - **Import/Export** — .meshplan JSON format, CSV node import, KML export
 - **Offline Operation** — Works without internet after initial map/terrain caching
 - **Privacy-First** — All data stays on your machine, no accounts or analytics
@@ -60,7 +61,7 @@ All downloads are self-contained — no Python or Node.js installation required.
 
 ## Opening on macOS
 
-> **This is NOT a virus warning.** macOS blocks any app without a paid Apple code-signing certificate. Mesh Community Planner is free, open-source software — we don't pay Apple's $99/year fee. The source code is fully public.
+> **This is NOT a virus warning.** macOS blocks any app without a paid Apple code-signing certificate. Mesh Community Planner is free, non-commercial open-source software.
 
 **Option A — Right-click method (no Terminal needed):**
 1. Open Finder → Applications
