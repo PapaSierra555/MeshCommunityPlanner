@@ -2,7 +2,7 @@
 
 A desktop application for planning LoRa mesh network deployments with terrain-aware RF propagation, hardware selection, and bill of materials generation.
 
-![Version](https://img.shields.io/badge/version-1.2.0-blue)
+![Version](https://img.shields.io/badge/version-1.3.2-blue)
 ![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-green)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
@@ -20,11 +20,13 @@ Download the latest release from the [GitHub Releases page](https://github.com/P
 
 | Platform | Format | File |
 |----------|--------|------|
-| **Windows** | Portable (.zip) | `MeshCommunityPlanner-1.2.0-win.zip` |
-| **macOS** | Disk image (.dmg) | `MeshCommunityPlanner-1.2.0.dmg` |
-| **Linux** | AppImage | `MeshCommunityPlanner-1.2.0-x86_64.AppImage` |
+| **Windows** | Portable (.zip) | `MeshCommunityPlanner-1.3.2-win.zip` |
+| **macOS (Apple Silicon)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.2.dmg` |
+| **Linux** | AppImage | `MeshCommunityPlanner-1.3.2-x86_64.AppImage` |
 
 All downloads are self-contained — no Python or Node.js installation required.
+
+> **macOS note:** The pre-built DMG runs on **Apple Silicon only (M1/M2/M3/M4)**. Intel Mac users must [build from source](#build-from-source). On first launch, macOS will show a security warning — this is expected for unsigned apps. See [Opening on macOS](#opening-on-macos) below.
 
 ---
 
@@ -53,6 +55,26 @@ All downloads are self-contained — no Python or Node.js installation required.
 - **Meshtastic** — Community mesh networking firmware
 - **MeshCore** — Custom mesh protocol
 - **Reticulum / RNode** — Cryptographic mesh networking
+
+---
+
+## Opening on macOS
+
+> **This is NOT a virus warning.** macOS blocks any app without a paid Apple code-signing certificate. Mesh Community Planner is free, open-source software — we don't pay Apple's $99/year fee. The source code is fully public.
+
+**Option A — Right-click method (no Terminal needed):**
+1. Open Finder → Applications
+2. Right-click `MeshCommunityPlanner` → **Open**
+3. Click **Open** in the dialog
+4. Done — macOS remembers this permanently
+
+**Option B — Terminal (required on macOS 13 Ventura and older if right-click fails):**
+```bash
+xattr -cr /Applications/MeshCommunityPlanner.app
+```
+`xattr -cr` clears the quarantine flag macOS places on downloaded files. It does not modify the app — it performs the same action as clicking "Open" in the right-click dialog. After running it, double-click the app to launch normally.
+
+> **Intel Mac users:** The pre-built DMG is Apple Silicon only. Intel Mac users must build from source (see below).
 
 ---
 
