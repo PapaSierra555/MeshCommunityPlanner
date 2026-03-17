@@ -97,7 +97,7 @@ curl http://127.0.0.1:8321/api/health
 
 ## macOS
 
-> **Architecture:** The pre-built DMG from GitHub Releases is **Apple Silicon only (M1/M2/M3/M4)**. Intel Mac users must build from source using the steps in this section — the build produces a native Intel binary on any Intel Mac.
+> ⚠️ **Intel Mac users: the pre-built DMG will not run on your machine.** Apple Silicon (ARM64) binaries cannot execute on Intel processors. Build from source using the steps below — the build produces a native Intel binary on any Intel Mac.
 
 ### Prerequisites
 

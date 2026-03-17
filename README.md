@@ -59,7 +59,7 @@ All downloads are self-contained — no Python or Node.js installation required.
 
 ---
 
-## Opening on macOS
+## 🍎 Opening on macOS
 
 > **This is NOT a virus warning.** macOS blocks any app without a paid Apple code-signing certificate. Mesh Community Planner is free, non-commercial open-source software.
 
@@ -75,7 +75,7 @@ xattr -cr /Applications/MeshCommunityPlanner.app
 ```
 `xattr -cr` clears the quarantine flag macOS places on downloaded files. It does not modify the app — it performs the same action as clicking "Open" in the right-click dialog. After running it, double-click the app to launch normally.
 
-> **Intel Mac users:** The pre-built DMG is Apple Silicon only. Intel Mac users must build from source (see below).
+> ⚠️ **Intel Mac users: the pre-built DMG will not run on your machine.** Apple Silicon (ARM64) binaries cannot execute on Intel processors. You must [build from source](#build-from-source) — the build produces a native Intel binary on any Intel Mac.
 
 ---
 
