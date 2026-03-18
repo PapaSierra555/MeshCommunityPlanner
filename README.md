@@ -2,7 +2,7 @@
 
 A desktop application for planning LoRa mesh network deployments with terrain-aware RF propagation, hardware selection, and bill of materials generation.
 
-![Version](https://img.shields.io/badge/version-1.3.2-blue)
+![Version](https://img.shields.io/badge/version-1.3.3-blue)
 ![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-green)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
@@ -20,13 +20,14 @@ Download the latest release from the [GitHub Releases page](https://github.com/P
 
 | Platform | Format | File |
 |----------|--------|------|
-| **Windows** | Portable (.zip) | `MeshCommunityPlanner-1.3.2-win.zip` |
-| **macOS (Apple Silicon / ARM64, not Intel)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.2.dmg` |
-| **Linux** | AppImage | `MeshCommunityPlanner-1.3.2-x86_64.AppImage` |
+| **Windows** | Portable (.zip) | `MeshCommunityPlanner-1.3.3-win.zip` |
+| **macOS (Apple Silicon — M1/M2/M3/M4)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.3.dmg` |
+| **macOS (Intel x86_64)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.3-x86_64.dmg` |
+| **Linux** | AppImage | `MeshCommunityPlanner-1.3.3-x86_64.AppImage` |
 
 All downloads are self-contained — no Python or Node.js installation required.
 
-> **macOS note:** The pre-built DMG runs on **Apple Silicon only (M1/M2/M3/M4)**. Intel Mac users must [build from source](#build-from-source). On first launch, macOS will show a security warning — this is expected for unsigned apps. See [Opening on macOS](#opening-on-macos) below.
+> **macOS note:** On first launch, macOS will show a security warning — this is expected for unsigned apps. See [Opening on macOS](#opening-on-macos) below.
 
 ---
 

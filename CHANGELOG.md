@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.3] — 2026-03-18
+
+### Added
+
+- **Intel Mac DMG** — a native x86_64 disk image (`MeshCommunityPlanner-1.3.3-x86_64.dmg`) is now included in every release, built via Rosetta 2 on a self-hosted Apple Silicon runner. Intel Mac users no longer need to build from source to get the pre-packaged app.
+
+### Changed
+
+- Downloads table in README and Installation Guide updated to list both Apple Silicon and Intel DMG files separately.
+- macOS section in Installation Guide updated: removed "Intel users must build from source" warning; replaced with chip-selection guidance.
+
+---
+
 ## [1.3.2] — 2026-03-15
 
 ### Added

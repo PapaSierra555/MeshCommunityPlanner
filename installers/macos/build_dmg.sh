@@ -15,7 +15,7 @@ INSTALLERS_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$INSTALLERS_DIR")"
 
 APP_NAME="Mesh Community Planner"
-APP_VERSION="${APP_VERSION:-1.3.2}"
+APP_VERSION="${APP_VERSION:-1.3.3}"
 APP_BUNDLE="${APP_NAME}.app"
 DMG_NAME="MeshCommunityPlanner-${APP_VERSION}.dmg"
 

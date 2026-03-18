@@ -15,7 +15,7 @@ INSTALLERS_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$INSTALLERS_DIR")"
 
 APP_NAME="MeshCommunityPlanner"
-APP_VERSION="${APP_VERSION:-1.3.2}"
+APP_VERSION="${APP_VERSION:-1.3.3}"
 PYINSTALLER_DIST="${PROJECT_ROOT}/dist/MeshCommunityPlanner"
 APPDIR="${PROJECT_ROOT}/dist/${APP_NAME}.AppDir"
 

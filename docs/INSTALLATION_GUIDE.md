@@ -1,7 +1,7 @@
 # Mesh Community Planner -- Build & Installation Guide
 
-**Version:** 1.3.2
-**Date:** 2026-03-17
+**Version:** 1.3.3
+**Date:** 2026-03-18
 
 ---
 
@@ -97,7 +97,7 @@ curl http://127.0.0.1:8321/api/health
 
 ## macOS
 
-> ⚠️ **Intel Mac users: the pre-built DMG will not run on your machine.** Apple Silicon (ARM64) binaries cannot execute on Intel processors. Build from source using the steps below — the build produces a native Intel binary on any Intel Mac.
+> **macOS downloads:** Two DMGs are available — `MeshCommunityPlanner-1.3.3.dmg` (Apple Silicon / M1–M4) and `MeshCommunityPlanner-1.3.3-x86_64.dmg` (Intel). Download the one that matches your Mac's processor. If unsure, click  → About This Mac and check the Chip field.
 
 ### Prerequisites
 

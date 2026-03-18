@@ -1,6 +1,6 @@
 # Mesh Community Planner — User Guide
 
-**Version:** 1.3.2
+**Version:** 1.3.3
 **Last Updated:** March 2026
 
 ---
@@ -882,4 +882,4 @@ For technical terms, see the [Technical Glossary](TECHNICAL-GLOSSARY.md).
 For answers to common questions, see the [FAQ](FAQ.md).
 
 *Last Updated: March 2026*
-*Version: 1.3.2*
+*Version: 1.3.3*
