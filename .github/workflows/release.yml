@@ -62,15 +62,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Create x86_64 virtual environment
+        run: arch -x86_64 /usr/local/opt/python@3.12/bin/python3.12 -m venv /tmp/mesh-venv-x86
+
       - name: Install x86_64 Python dependencies (via Rosetta)
-        run: arch -x86_64 /usr/local/opt/python@3.12/bin/pip3.12 install -r requirements.txt pyinstaller
+        run: arch -x86_64 /tmp/mesh-venv-x86/bin/pip install -r requirements.txt pyinstaller
 
       - name: Build frontend
         working-directory: frontend
         run: npm ci && npx vite build
 
       - name: Build PyInstaller bundle (Intel x86_64)
-        run: arch -x86_64 /usr/local/opt/python@3.12/bin/python3.12 -m PyInstaller installers/mesh_planner.spec --noconfirm
+        run: arch -x86_64 /tmp/mesh-venv-x86/bin/python -m PyInstaller installers/mesh_planner.spec --noconfirm
 
       - name: Build DMG
         env:
