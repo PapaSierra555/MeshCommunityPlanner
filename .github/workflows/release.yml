@@ -66,7 +66,7 @@ jobs:
         run: arch -x86_64 /usr/local/opt/python@3.12/bin/python3.12 -m venv /tmp/mesh-venv-x86
 
       - name: Install x86_64 Python dependencies (via Rosetta)
-        run: arch -x86_64 /tmp/mesh-venv-x86/bin/pip install -r requirements.txt pyinstaller
+        run: arch -x86_64 /tmp/mesh-venv-x86/bin/pip install -r requirements.txt pyinstaller pillow
 
       - name: Build frontend
         working-directory: frontend
@@ -78,6 +78,7 @@ jobs:
       - name: Build DMG
         env:
           APP_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}
+          PATH: /tmp/mesh-venv-x86/bin:/usr/local/opt/python@3.12/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin
         run: |
           VERSION="${APP_VERSION#v}"
           export APP_VERSION="$VERSION"
