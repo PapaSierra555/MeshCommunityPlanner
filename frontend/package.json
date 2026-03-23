@@ -1,7 +1,7 @@
 {
   "name": "mesh-community-planner-frontend",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.4",
   "type": "module",
   "scripts": {
     "dev": "vite",

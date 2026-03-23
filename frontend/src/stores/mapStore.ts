@@ -189,6 +189,12 @@ export interface MapState {
   // Coverage heatmap opacity (0..1)
   coverageOpacity: number;
 
+  // Coverage circle hatch mode — replaces solid fills with per-node SVG patterns
+  coverageHatchMode: boolean;
+
+  // Satellite base tile layer
+  satelliteMode: boolean;
+
   // Map invalidation (triggers invalidateSize after sidebar toggle)
   map_invalidate_counter: number;
 
@@ -230,6 +236,8 @@ export interface MapState {
   setSignalOverlays: (overlays: SignalOverlay[]) => void;
   clearSignalOverlays: () => void;
   setCoverageOpacity: (opacity: number) => void;
+  setCoverageHatchMode: (enabled: boolean) => void;
+  setSatelliteMode: (enabled: boolean) => void;
   setElevationLayerEnabled: (enabled: boolean) => void;
   setElevationOpacity: (opacity: number) => void;
   setElevationRange: (min: number, max: number) => void;
@@ -306,6 +314,8 @@ const initialState = {
   elevationMin: storedElevationRange.elevationMin,
   elevationMax: storedElevationRange.elevationMax,
   coverageOpacity: 0.7,
+  coverageHatchMode: false,
+  satelliteMode: false,
   map_invalidate_counter: 0,
   fit_bounds_counter: 0,
   fit_bounds: null as [[number, number], [number, number]] | null,
@@ -407,6 +417,8 @@ export const useMapStore = create<MapState>((set) => ({
   setSignalOverlays: (overlays) => set({ signal_overlays: overlays }),
   clearSignalOverlays: () => set({ signal_overlays: [] }),
   setCoverageOpacity: (opacity) => set({ coverageOpacity: opacity }),
+  setCoverageHatchMode: (enabled) => set({ coverageHatchMode: enabled }),
+  setSatelliteMode: (enabled) => set({ satelliteMode: enabled }),
   setElevationLayerEnabled: (enabled) => set({ elevation_layer_enabled: enabled }),
   setElevationOpacity: (opacity) => set({ elevationOpacity: opacity }),
   setElevationRange: (min, max) => set({ elevationMin: min, elevationMax: max }),

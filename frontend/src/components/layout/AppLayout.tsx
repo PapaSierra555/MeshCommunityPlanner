@@ -386,6 +386,10 @@ export function AppLayout() {
   const routePathOverlays = useMapStore((s) => s.route_path_overlays);
   const elevationLayerEnabled = useMapStore((s) => s.elevation_layer_enabled);
   const setElevationLayerEnabled = useMapStore((s) => s.setElevationLayerEnabled);
+  const coverageHatchMode = useMapStore((s) => s.coverageHatchMode);
+  const setCoverageHatchMode = useMapStore((s) => s.setCoverageHatchMode);
+  const satelliteMode = useMapStore((s) => s.satelliteMode);
+  const setSatelliteMode = useMapStore((s) => s.setSatelliteMode);
   const dirty = usePlanStore((s) => s.dirty);
   const clearDirty = usePlanStore((s) => s.clearDirty);
 
@@ -2725,6 +2729,10 @@ export function AppLayout() {
         onSaveScreenshot={handleSaveScreenshot}
         onToggleElevation={() => setElevationLayerEnabled(!elevationLayerEnabled)}
         elevationEnabled={elevationLayerEnabled}
+        onToggleCoverageHatch={() => setCoverageHatchMode(!coverageHatchMode)}
+        coverageHatchEnabled={coverageHatchMode}
+        onToggleSatellite={() => setSatelliteMode(!satelliteMode)}
+        satelliteEnabled={satelliteMode}
         hasOverlays={losOverlays.length > 0 || coverageOverlays.length > 0 || terrainCoverageOverlays.length > 0 || viewshedOverlays.length > 0 || routePathOverlays.length > 0}
         hasLOSOverlays={losOverlays.length > 0}
         selectedCount={selectedNodeIds.length}

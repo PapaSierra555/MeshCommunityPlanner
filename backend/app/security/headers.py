@@ -19,7 +19,7 @@ _SECURITY_HEADERS = {
         "default-src 'self'; "
         "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
         "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
-        "img-src 'self' data: https://*.tile.openstreetmap.org; "
+        "img-src 'self' data: https://*.tile.openstreetmap.org https://server.arcgisonline.com; "
         "connect-src 'self' ws://127.0.0.1:*"
     ),
     "Referrer-Policy": "strict-origin-when-cross-origin",

@@ -144,7 +144,7 @@ chmod +x installers/macos/build_dmg.sh
 ./installers/macos/build_dmg.sh
 ```
 
-Output: `dist/MeshCommunityPlanner-1.2.0.dmg`
+Output: `installers/dist/MeshCommunityPlanner-1.3.3.dmg`
 
 To install: mount the DMG, drag "Mesh Community Planner" to Applications.
 

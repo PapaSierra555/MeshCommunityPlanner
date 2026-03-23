@@ -76,8 +76,6 @@ xattr -cr /Applications/MeshCommunityPlanner.app
 ```
 `xattr -cr` clears the quarantine flag macOS places on downloaded files. It does not modify the app — it performs the same action as clicking "Open" in the right-click dialog. After running it, double-click the app to launch normally.
 
-> ⚠️ **Intel Mac users: the pre-built DMG will not run on your machine.** Apple Silicon (ARM64) binaries cannot execute on Intel processors. You must [build from source](#build-from-source) — the build produces a native Intel binary on any Intel Mac.
-
 ---
 
 ## Build from Source

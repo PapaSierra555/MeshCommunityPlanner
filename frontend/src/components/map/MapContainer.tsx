@@ -13,6 +13,7 @@ import type { TerrainCoverageOverlay, ViewshedOverlay, RoutePathOverlay, Floodin
 import { CoverageLegend } from './CoverageLegend';
 import { ElevationLegend } from './ElevationLegend';
 import { getAPIClient } from '../../services/api';
+import { ensureHatchPatterns, removeHatchPatterns, getPatternId, getNodeHatchColor, getPatternType, PatternType } from '../../utils/hatchPatterns';
 
 // Inline SVG marker icons - no external images needed
 function createNodeIcon(selected: boolean = false, multiSelected: boolean = false) {
@@ -39,6 +40,76 @@ function createNodeIcon(selected: boolean = false, multiSelected: boolean = fals
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795];
 const DEFAULT_ZOOM = 4;
 
+/** Load a data URL as a fully decoded HTMLImageElement. */
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+/**
+ * Draw the sub-region of `img` that corresponds to the geographic intersection
+ * rectangle onto an offscreen canvas of size W×H.  Returns the canvas.
+ */
+function drawImageSubregion(
+  img: HTMLImageElement,
+  bounds: { min_lat: number; max_lat: number; min_lon: number; max_lon: number },
+  intMinLat: number, intMaxLat: number,
+  intMinLon: number, intMaxLon: number,
+  W: number, H: number,
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d')!;
+
+  const lonRange = bounds.max_lon - bounds.min_lon;
+  const latRange = bounds.max_lat - bounds.min_lat;
+
+  // Source rect within the image (Y is flipped: top of image = max_lat)
+  const sx = ((intMinLon - bounds.min_lon) / lonRange) * img.naturalWidth;
+  const sy = ((bounds.max_lat - intMaxLat) / latRange) * img.naturalHeight;
+  const sw = ((intMaxLon - intMinLon) / lonRange) * img.naturalWidth;
+  const sh = ((intMaxLat - intMinLat) / latRange) * img.naturalHeight;
+
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+  return canvas;
+}
+
+/** Parse a 6-digit hex color string into {r, g, b}. */
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace('#', '');
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+
+/**
+ * Returns true if pixel (x, y) falls on a hatch line for the given pattern type.
+ * Spacing matches the SVG pattern tiles (12 px, 2 px stroke-width).
+ */
+function isHatchPixel(x: number, y: number, type: PatternType): boolean {
+  const S = 12; // tile size matching hatchPatterns.ts
+  const W = 2;  // stroke width
+  switch (type) {
+    case 'diag-right':   return ((x + y) % S) < W;
+    case 'diag-left':    return (((x - y) % S) + S) % S < W;
+    case 'horizontal':   return y % S < W;
+    case 'vertical':     return x % S < W;
+    case 'dots': {
+      const cx = x % S, cy = y % S;
+      const dist = Math.sqrt((cx - S / 2) ** 2 + (cy - S / 2) ** 2);
+      return dist < W;
+    }
+    case 'cross':        return y % S < W || x % S < W;
+  }
+}
+
 export interface MapContainerProps {
   className?: string;
 }
@@ -51,12 +122,14 @@ export function MapContainer({ className = '' }: MapContainerProps) {
   const losLayerRef = useRef<L.LayerGroup | null>(null);
   const coverageLayerRef = useRef<L.LayerGroup | null>(null);
   const terrainCoverageLayerRef = useRef<L.LayerGroup | null>(null);
+  const terrainHatchLayerRef = useRef<L.LayerGroup | null>(null);
   const viewshedLayerRef = useRef<L.LayerGroup | null>(null);
   const routePathLayerRef = useRef<L.LayerGroup | null>(null);
   const floodingLayerRef = useRef<L.LayerGroup | null>(null);
   const placementLayerRef = useRef<L.LayerGroup | null>(null);
   const signalLayerRef = useRef<L.LayerGroup | null>(null);
   const elevationTileLayerRef = useRef<L.TileLayer | null>(null);
+  const baseTileLayerRef = useRef<L.TileLayer | null>(null);
   const elevationEnsureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragStartPosRef = useRef<L.LatLng | null>(null);
 
@@ -79,6 +152,8 @@ export function MapContainer({ className = '' }: MapContainerProps) {
   const placementCoverageRadiusM = useMapStore((s) => s.placement_coverage_radius_m);
   const placementSearchBounds = useMapStore((s) => s.placement_search_bounds);
   const coverageOpacity = useMapStore((s) => s.coverageOpacity);
+  const coverageHatchMode = useMapStore((s) => s.coverageHatchMode);
+  const satelliteMode = useMapStore((s) => s.satelliteMode);
   const elevationLayerEnabled = useMapStore((s) => s.elevation_layer_enabled);
   const elevationOpacity = useMapStore((s) => s.elevationOpacity);
   const elevationMin = useMapStore((s) => s.elevationMin);
@@ -229,10 +304,12 @@ export function MapContainer({ className = '' }: MapContainerProps) {
       zoomControl: true,
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
-    }).addTo(map);
+    });
+    osmLayer.addTo(map);
+    baseTileLayerRef.current = osmLayer;
 
     const markersLayer = L.layerGroup().addTo(map);
     markersLayerRef.current = markersLayer;
@@ -245,6 +322,10 @@ export function MapContainer({ className = '' }: MapContainerProps) {
 
     const terrainCoverageLayer = L.layerGroup().addTo(map);
     terrainCoverageLayerRef.current = terrainCoverageLayer;
+
+    // Terrain hatch layer sits above the heatmap images so patterns are visible
+    const terrainHatchLayer = L.layerGroup().addTo(map);
+    terrainHatchLayerRef.current = terrainHatchLayer;
 
     const viewshedLayer = L.layerGroup().addTo(map);
     viewshedLayerRef.current = viewshedLayer;
@@ -539,21 +620,24 @@ export function MapContainer({ className = '' }: MapContainerProps) {
 
   // Draw coverage overlays - DYNAMIC: look up current node positions
   useEffect(() => {
-    if (!coverageLayerRef.current) return;
+    if (!coverageLayerRef.current || !leafletMapRef.current) return;
     coverageLayerRef.current.clearLayers();
 
-    coverageOverlays.forEach((cov) => {
+    coverageOverlays.forEach((cov, index) => {
       // Look up current position from nodes array
       const node = nodes.find((n) => String(n.id) === cov.nodeUuid);
       if (!node) return; // skip if deleted
 
+      const strokeColor = coverageHatchMode ? getNodeHatchColor(index) : '#3498db';
+      const fillColor = coverageHatchMode ? `url(#${getPatternId(index)})` : '#3498db';
+
       const circle = L.circle([node.latitude, node.longitude], {
         radius: cov.coverageRadiusM,
-        color: '#3498db',
-        fillColor: '#3498db',
-        fillOpacity: 0.15,
+        color: strokeColor,
+        fillColor,
+        fillOpacity: coverageHatchMode ? 1 : 0.15,
         weight: 2,
-        dashArray: '5, 5',
+        dashArray: coverageHatchMode ? undefined : '5, 5',
       });
 
       circle.bindPopup(
@@ -565,7 +649,45 @@ export function MapContainer({ className = '' }: MapContainerProps) {
       circle.bindTooltip(`${(cov.coverageRadiusM / 1000).toFixed(1)}km radius`);
       coverageLayerRef.current!.addLayer(circle);
     });
-  }, [coverageOverlays, nodes]); // depends on NODES so circles follow nodes
+
+    // Inject/remove SVG hatch pattern defs AFTER circles are drawn.
+    // Leaflet creates its SVG element lazily on first path add, so querying
+    // before the forEach above would return null and the url(#id) references
+    // would silently fall back to no fill.
+    const overlayPane = leafletMapRef.current.getPanes().overlayPane;
+    const svgEl = overlayPane?.querySelector('svg') as SVGSVGElement | null;
+    if (svgEl) {
+      if (coverageHatchMode) {
+        ensureHatchPatterns(svgEl, coverageOverlays.length);
+      } else {
+        removeHatchPatterns(svgEl);
+      }
+    }
+  }, [coverageOverlays, nodes, coverageHatchMode]); // depends on NODES so circles follow nodes
+
+  // Swap base tile layer between OSM street map and ESRI World Imagery satellite.
+  // The base layer ref is captured at map init; we remove it and replace it on toggle.
+  useEffect(() => {
+    const map = leafletMapRef.current;
+    const currentBase = baseTileLayerRef.current;
+    if (!map || !currentBase) return;
+
+    map.removeLayer(currentBase);
+
+    const OSM_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+    const OSM_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+    const SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+    const SAT_ATTR = 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community';
+
+    const newBase = satelliteMode
+      ? L.tileLayer(SAT_URL, { attribution: SAT_ATTR, maxZoom: 19 })
+      : L.tileLayer(OSM_URL, { attribution: OSM_ATTR, maxZoom: 19 });
+
+    // Insert below all overlay layers so markers/coverage stay on top
+    newBase.addTo(map);
+    newBase.bringToBack();
+    baseTileLayerRef.current = newBase;
+  }, [satelliteMode]);
 
   // Draw terrain coverage heat map overlays (L.imageOverlay)
   useEffect(() => {
@@ -622,6 +744,97 @@ export function MapContainer({ className = '' }: MapContainerProps) {
       terrainCoverageLayerRef.current!.addLayer(imageOverlay);
     });
   }, [terrainCoverageOverlays, coverageOpacity, nodes]);
+
+  // Render hatch overlay images showing only the actual pixel overlap between
+  // terrain coverage heatmaps. For each pair (i, j), load both imageDataUrl PNGs
+  // onto offscreen canvases, find pixels where both have signal coverage (alpha > 10),
+  // paint a per-pair hatch pattern onto those pixels only, then place the result as
+  // an L.imageOverlay bounded to the geographic intersection of the two heatmaps.
+  useEffect(() => {
+    if (!terrainHatchLayerRef.current || !leafletMapRef.current) return;
+    terrainHatchLayerRef.current.clearLayers();
+
+    if (!coverageHatchMode || terrainCoverageOverlays.length < 2) return;
+
+    let cancelled = false;
+    const SIZE = 512; // offscreen canvas resolution
+
+    const renderOverlaps = async () => {
+      let pairIndex = 0;
+
+      for (let i = 0; i < terrainCoverageOverlays.length; i++) {
+        for (let j = i + 1; j < terrainCoverageOverlays.length; j++) {
+          if (cancelled) return;
+
+          const ov1 = terrainCoverageOverlays[i];
+          const ov2 = terrainCoverageOverlays[j];
+          if (!ov1.imageDataUrl || !ov2.imageDataUrl) { pairIndex++; continue; }
+
+          const b1 = ov1.bounds;
+          const b2 = ov2.bounds;
+
+          // Geographic bounding-box intersection
+          const intMinLat = Math.max(b1.min_lat, b2.min_lat);
+          const intMaxLat = Math.min(b1.max_lat, b2.max_lat);
+          const intMinLon = Math.max(b1.min_lon, b2.min_lon);
+          const intMaxLon = Math.min(b1.max_lon, b2.max_lon);
+
+          if (intMinLat >= intMaxLat || intMinLon >= intMaxLon) { pairIndex++; continue; }
+
+          const [img1, img2] = await Promise.all([
+            loadImage(ov1.imageDataUrl),
+            loadImage(ov2.imageDataUrl),
+          ]);
+          if (cancelled) return;
+
+          // Crop each image to the intersection region, drawn at SIZE×SIZE
+          const c1 = drawImageSubregion(img1, b1, intMinLat, intMaxLat, intMinLon, intMaxLon, SIZE, SIZE);
+          const c2 = drawImageSubregion(img2, b2, intMinLat, intMaxLat, intMinLon, intMaxLon, SIZE, SIZE);
+
+          const px1 = c1.getContext('2d')!.getImageData(0, 0, SIZE, SIZE).data;
+          const px2 = c2.getContext('2d')!.getImageData(0, 0, SIZE, SIZE).data;
+
+          const resultCanvas = document.createElement('canvas');
+          resultCanvas.width = SIZE;
+          resultCanvas.height = SIZE;
+          const ctx = resultCanvas.getContext('2d')!;
+          const result = ctx.createImageData(SIZE, SIZE);
+          const rd = result.data;
+
+          const color = hexToRgb(getNodeHatchColor(pairIndex));
+          const patType = getPatternType(pairIndex);
+
+          for (let y = 0; y < SIZE; y++) {
+            for (let x = 0; x < SIZE; x++) {
+              const idx = (y * SIZE + x) * 4;
+              if (px1[idx + 3] > 10 && px2[idx + 3] > 10 && isHatchPixel(x, y, patType)) {
+                rd[idx]     = color.r;
+                rd[idx + 1] = color.g;
+                rd[idx + 2] = color.b;
+                rd[idx + 3] = 220;
+              }
+            }
+          }
+
+          ctx.putImageData(result, 0, 0);
+          if (cancelled) return;
+
+          const dataUrl = resultCanvas.toDataURL('image/png');
+          const overlayBounds: L.LatLngBoundsExpression = [
+            [intMinLat, intMinLon],
+            [intMaxLat, intMaxLon],
+          ];
+          L.imageOverlay(dataUrl, overlayBounds, { opacity: 1, interactive: false, zIndex: 250 })
+            .addTo(terrainHatchLayerRef.current!);
+
+          pairIndex++;
+        }
+      }
+    };
+
+    renderOverlaps().catch(console.error);
+    return () => { cancelled = true; };
+  }, [terrainCoverageOverlays, coverageHatchMode]);
 
   // Draw viewshed overlays — green solid for visible, red dashed for blocked
   useEffect(() => {

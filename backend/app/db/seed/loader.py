@@ -166,8 +166,8 @@ def _find_sample_plans_dir() -> Path | None:
         if bundled.is_dir():
             return bundled
 
-    # Development: test_plans/ at project root (4 levels up from this file)
-    project_root = Path(__file__).resolve().parent.parent.parent.parent
+    # Development: test_plans/ at project root (5 levels up from this file)
+    project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
     dev_dir = project_root / "test_plans"
     if dev_dir.is_dir():
         return dev_dir

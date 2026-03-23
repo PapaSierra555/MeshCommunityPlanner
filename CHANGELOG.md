@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.4] — 2026-03-23
+
+### Added
+
+- **Coverage Hatch Mode** — new toggle in the Tools menu that marks overlapping terrain coverage zones with per-node diagonal hatch patterns. Each node's signal footprint is assigned a unique color and stripe direction; where two footprints share coverage, the stripes visually cross-hatch, making shared zones immediately legible without obscuring the underlying signal-strength heatmap.
+
+  Hatch detection is pixel-accurate: the overlap is computed by comparing the actual raster heatmap images (not the circular analysis boundary), so only pixels where both nodes have measurable signal (-80 to -130 dBm) are hatched. Three or more overlapping nodes accumulate multiple hatch layers, producing progressively denser patterns.
+
+  ![Coverage Hatch Mode showing Table Mountain and Lookout Mountain overlap near Golden, CO](docs/screenshots/HatchMode.png)
+
+- **Satellite View** — new toggle in the Tools menu that switches the base map between OpenStreetMap street view and ESRI World Imagery satellite photography. Particularly useful for rural and off-grid site planning where landmarks and terrain features matter more than road names. Tiles cache locally after first view, enabling offline use thereafter.
+
+  Satellite imagery provided by ESRI World Imagery. *Imagery © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community.*
+
+  ![Satellite View showing node placement near Longmont, CO](docs/screenshots/SatelliteView.png)
+
+---
+
 ## [1.3.3] — 2026-03-18
 
 ### Added

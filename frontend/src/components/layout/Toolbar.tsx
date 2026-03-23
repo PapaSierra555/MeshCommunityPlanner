@@ -61,6 +61,10 @@ interface ToolbarProps {
   onSaveScreenshot?: () => void;
   onToggleElevation?: () => void;
   elevationEnabled?: boolean;
+  onToggleCoverageHatch?: () => void;
+  coverageHatchEnabled?: boolean;
+  onToggleSatellite?: () => void;
+  satelliteEnabled?: boolean;
   hasOverlays?: boolean;
   hasLOSOverlays?: boolean;
   selectedCount?: number;
@@ -122,6 +126,10 @@ export function Toolbar({
   onSaveScreenshot,
   onToggleElevation,
   elevationEnabled = false,
+  onToggleCoverageHatch,
+  coverageHatchEnabled = false,
+  onToggleSatellite,
+  satelliteEnabled = false,
   hasOverlays = false,
   hasLOSOverlays = false,
   selectedCount = 0,
@@ -547,9 +555,23 @@ export function Toolbar({
                   <button
                     className="toolbar-dropdown-item"
                     type="button"
+                    onClick={() => handleItemClick(onToggleSatellite)}
+                    title="Switch the base map between OpenStreetMap street view and ESRI World Imagery satellite. Useful for identifying landmarks, rural sites, and off-grid locations. Satellite tiles require an internet connection on first view of any area. Imagery © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community.">
+                    {satelliteEnabled ? '\u2713 ' : ''}Satellite View
+                  </button>
+                  <button
+                    className="toolbar-dropdown-item"
+                    type="button"
                     onClick={() => handleItemClick(onToggleElevation)}
                     title="Toggle an elevation heatmap layer showing terrain height (requires SRTM data download)">
                     {elevationEnabled ? '\u2713 ' : ''}Elevation Heatmap
+                  </button>
+                  <button
+                    className="toolbar-dropdown-item"
+                    type="button"
+                    onClick={() => handleItemClick(onToggleCoverageHatch)}
+                    title="Switch coverage circles from solid fills to per-node hatch patterns. Overlapping circles cross-hatch, making shared coverage zones easy to spot.">
+                    {coverageHatchEnabled ? '\u2713 ' : ''}Coverage Hatch Mode
                   </button>
                   <div className="toolbar-dropdown-separator" />
                   <button
@@ -639,7 +661,7 @@ export function Toolbar({
           </div>
         </div>
         <nav className="toolbar-actions">
-          <span className="toolbar-version">v1.3.2</span>
+          <span className="toolbar-version">v1.3.4</span>
           <button
             className="toolbar-exit-btn"
             type="button"
@@ -658,7 +680,7 @@ export function Toolbar({
             <div className="appinfo-modal-header">
               <div>
                 <div className="appinfo-title">Mesh Community Planner</div>
-                <div className="appinfo-version">Version 1.3.2</div>
+                <div className="appinfo-version">Version 1.3.4</div>
               </div>
               <button className="appinfo-close" type="button" onClick={() => setOpenMenu(null)} title="Close">&times;</button>
             </div>

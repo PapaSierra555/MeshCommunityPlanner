@@ -16,13 +16,13 @@ jobs:
     runs-on: macos-14
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -48,7 +48,7 @@ jobs:
           bash installers/macos/build_dmg.sh
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-dmg
           path: installers/dist/*.dmg
@@ -60,10 +60,10 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Create x86_64 virtual environment
-        run: arch -x86_64 /usr/local/opt/python@3.12/bin/python3.12 -m venv /tmp/mesh-venv-x86
+        run: arch -x86_64 /usr/local/opt/python@3.12/bin/python3.12 -m venv --clear /tmp/mesh-venv-x86
 
       - name: Install x86_64 Python dependencies (via Rosetta)
         run: arch -x86_64 /tmp/mesh-venv-x86/bin/pip install -r requirements.txt pyinstaller pillow
@@ -88,7 +88,7 @@ jobs:
           done
 
       - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-dmg-x86_64
           path: installers/dist/*.dmg
@@ -102,13 +102,13 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -140,7 +140,7 @@ jobs:
           bash installers/linux/build_appimage.sh
 
       - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-appimage
           path: dist/*.AppImage
@@ -152,13 +152,13 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -181,7 +181,7 @@ jobs:
           Compress-Archive -Path dist\MeshCommunityPlanner -DestinationPath "dist\MeshCommunityPlanner-${version}-win.zip"
 
       - name: Upload Windows artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-zip
           path: dist/*.zip
@@ -198,7 +198,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
