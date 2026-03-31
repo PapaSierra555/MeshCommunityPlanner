@@ -390,6 +390,8 @@ export function AppLayout() {
   const setCoverageHatchMode = useMapStore((s) => s.setCoverageHatchMode);
   const satelliteMode = useMapStore((s) => s.satelliteMode);
   const setSatelliteMode = useMapStore((s) => s.setSatelliteMode);
+  const lockNodePositions = useMapStore((s) => s.lockNodePositions);
+  const setLockNodePositions = useMapStore((s) => s.setLockNodePositions);
   const dirty = usePlanStore((s) => s.dirty);
   const clearDirty = usePlanStore((s) => s.clearDirty);
 
@@ -743,6 +745,7 @@ export function AppLayout() {
           description: currentPlan.description || '',
           firmware_family: currentPlan.firmware_family,
           region: currentPlan.region,
+          lock_node_positions: useMapStore.getState().lockNodePositions,
         },
         nodes: planNodes.map((n) => ({
           name: n.name,
@@ -794,6 +797,7 @@ export function AppLayout() {
         let skipped = 0;
         let lastPlan: Plan | null = null;
         let lastNodes: Node[] = [];
+        let lastImportedLockNodePositions: boolean | undefined;
 
         for (const file of files) {
           try {
@@ -854,6 +858,9 @@ export function AppLayout() {
             imported++;
             lastPlan = plan;
             lastNodes = importedNodes;
+            lastImportedLockNodePositions = typeof data.plan.lock_node_positions === 'boolean'
+              ? data.plan.lock_node_positions
+              : undefined;
           } catch (fileErr: any) {
             console.error(`Failed to import file "${file.name}":`, fileErr);
             skipped++;
@@ -867,6 +874,9 @@ export function AppLayout() {
           setShowPlanList(false);
           clearLOSOverlays();
           clearCoverageOverlays();
+          if (lastImportedLockNodePositions !== undefined) {
+            setLockNodePositions(lastImportedLockNodePositions);
+          }
         }
         setStatusMessage(`Imported ${imported} plan(s).${skipped ? ` ${skipped} skipped.` : ''}`);
       } catch (err: any) {
@@ -874,7 +884,7 @@ export function AppLayout() {
       }
     };
     input.click();
-  }, [api, setPlan, setNodes, setMode, clearLOSOverlays, clearCoverageOverlays]);
+  }, [api, setPlan, setNodes, setMode, clearLOSOverlays, clearCoverageOverlays, setLockNodePositions]);
 
   // ---- CSV Export/Import ----
 
@@ -2313,6 +2323,7 @@ export function AppLayout() {
             description: (plan as any).description || '',
             firmware_family: plan.firmware_family,
             region: plan.region,
+            lock_node_positions: useMapStore.getState().lockNodePositions,
           },
           nodes: nodeList.map((n: Node) => ({
             name: n.name, latitude: n.latitude, longitude: n.longitude,
@@ -2984,6 +2995,18 @@ export function AppLayout() {
                           Elevated node ({selectedNode.antenna_height_m} m) — use "Clear LOS (Elevated)" for accurate simulation. Current environment underestimates range at height.
                         </p>
                       )}
+                      <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <input
+                          type="checkbox"
+                          id="lockNodePositions"
+                          checked={lockNodePositions}
+                          onChange={(e) => setLockNodePositions(e.target.checked)}
+                          title="When enabled, nodes cannot be moved by dragging markers on the map. Included in exported .meshplan.json; import restores it from the file."
+                        />
+                        <label htmlFor="lockNodePositions" className="sidebar-hint" style={{ margin: 0, cursor: 'pointer' }} title="When enabled, nodes cannot be moved by dragging markers on the map. Included in exported .meshplan.json; import restores it from the file.">
+                          Lock node positions
+                        </label>
+                      </div>
                       {(() => {
                         // Radio horizon for the selected node (or tallest target node)
                         const coverageTargetNodes = selectedNodeIds.length > 0
