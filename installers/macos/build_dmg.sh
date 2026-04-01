@@ -102,6 +102,7 @@ if command -v create-dmg &> /dev/null; then
             --icon "MeshCommunityPlanner.app" 140 145 \
             --app-drop-link 460 145 \
             --volicon "${TMP_SRC}/volicon.icns" \
+            --skip-jenkins \
             "${BACKGROUND_ARG[@]}" \
             "${DMG_PATH}" \
             "${TMP_SRC}/MeshCommunityPlanner.app"
@@ -112,6 +113,7 @@ if command -v create-dmg &> /dev/null; then
             --icon-size 100 \
             --icon "MeshCommunityPlanner.app" 140 145 \
             --app-drop-link 460 145 \
+            --skip-jenkins \
             "${BACKGROUND_ARG[@]}" \
             "${DMG_PATH}" \
             "${TMP_SRC}/MeshCommunityPlanner.app"
