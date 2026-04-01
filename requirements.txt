@@ -13,3 +13,4 @@ python-multipart==0.0.20
 eval-type-backport==0.2.2
 pytest==8.3.4
 pytest-asyncio==0.24.0
+paho-mqtt==2.1.0

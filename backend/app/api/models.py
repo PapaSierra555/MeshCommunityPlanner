@@ -266,7 +266,7 @@ class TerrainCoverageGridRequest(BaseModel):
     cable_loss_db: float = Field(0.0, ge=0)
     receiver_sensitivity_dbm: float = -130.0
     environment: str = Field("suburban", pattern="^(los_elevated|open_rural|suburban|urban|indoor)$")
-    max_radius_m: float = Field(15000.0, ge=100, le=50000)
+    max_radius_m: float = Field(15000.0, ge=100, le=200000)
     num_radials: int = Field(360, ge=36, le=720)
     sample_interval_m: float = Field(30.0, ge=10, le=200)
     # PA module params — when present, effective TX = min(tx+gain, max_output)

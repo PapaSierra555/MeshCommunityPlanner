@@ -3018,12 +3018,7 @@ export function AppLayout() {
                             : 3);
                         const horizonM = 3570 * (Math.sqrt(Math.max(0, h)) + Math.sqrt(1.5));
                         const horizonMaxKm = Math.ceil(horizonM / 1000);
-                        // Auto-clamp stored value if node antenna height changed
-                        const clampedRadius = Math.min(maxRadiusKm, horizonMaxKm);
-                        if (clampedRadius !== maxRadiusKm) {
-                          setMaxRadiusKm(clampedRadius);
-                          if (rememberCoverageSettings) localStorage.setItem(COVERAGE_SETTINGS_KEY, JSON.stringify({ env: coverageEnv, maxRadiusKm: clampedRadius, buildId: BUILD_ID }));
-                        }
+                        const displayRadius = maxRadiusKm;
                         const saveAndSet = (v: number) => {
                           setMaxRadiusKm(v);
                           if (rememberCoverageSettings) localStorage.setItem(COVERAGE_SETTINGS_KEY, JSON.stringify({ env: coverageEnv, maxRadiusKm: v, buildId: BUILD_ID }));
@@ -3034,15 +3029,15 @@ export function AppLayout() {
                             <NumberInput
                               id="maxRadiusKm"
                               min={1}
-                              max={horizonMaxKm}
+                              max={200}
                               step={1}
-                              value={clampedRadius}
+                              value={displayRadius}
                               onChange={(v) => saveAndSet(v)}
-                              aria-label={`Maximum coverage analysis radius in kilometres (1–${horizonMaxKm})`}
-                              title={`Physical limit: ${horizonMaxKm} km radio horizon at ${h}m antenna height.`}
+                              aria-label={`Maximum coverage analysis radius in kilometres (1–200)`}
+                              title={`Radio horizon at ${h}m antenna height: ~${horizonMaxKm} km. For elevated nodes, increase antenna height to unlock longer range.`}
                             />
                             <p className="sidebar-hint" style={{ marginBottom: 0, marginTop: '0.2rem' }}>
-                              Radio horizon at {h} m: {horizonMaxKm} km max
+                              Radio horizon at {h} m: ~{horizonMaxKm} km (increase antenna height for longer range)
                             </p>
                           </div>
                         );

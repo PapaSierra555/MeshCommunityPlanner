@@ -14,6 +14,7 @@ import { getAPIClient } from '../../services/api';
 import { usePlanStore } from '../../stores/planStore';
 import meshcoreIcon from '../../assets/icons/meshcore.svg';
 import reticulumIcon from '../../assets/icons/reticulum.svg';
+import meshtasticIcon from '../../assets/icons/meshtastic.svg';
 import './InternetMapImportModal.css';
 
 /** Read the injected auth token (set by the backend at startup). */
@@ -50,7 +51,7 @@ interface InternetMapImportModalProps {
 }
 
 type Phase = 'select' | 'preview';
-type Source = 'meshcore' | 'reticulum';
+type Source = 'meshcore' | 'reticulum' | 'meshtastic';
 
 // ---- Source metadata ----
 
@@ -69,6 +70,13 @@ const SOURCE_META: Record<Source, { title: string; subtitle: string; icon: strin
     url: 'directory.rns.recipes',
     desc: 'Reticulum mesh network node directory. Includes submitted and discovered nodes with coordinates and radio parameters.',
   },
+  meshtastic: {
+    title: 'Import Nodes — Meshtastic MQTT',
+    subtitle: 'Listen for live nodes from a Meshtastic MQTT broker',
+    icon: meshtasticIcon,
+    url: 'mqtt.meshtastic.org',
+    desc: 'Connects to a Meshtastic MQTT broker and listens for nodeinfo and position messages. Works with the public Meshtastic broker or your own local broker. Requires nodes to be publishing to the JSON MQTT topic.',
+  },
 };
 
 // ---- Component ----
@@ -83,6 +91,9 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
   const [filter, setFilter] = useState('');
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
+  const [mqttBroker, setMqttBroker] = useState('mqtt.meshtastic.org');
+  const [mqttDuration, setMqttDuration] = useState(15);
+  const [mqttCountdown, setMqttCountdown] = useState<number | null>(null);
 
   const currentPlan = usePlanStore((s) => s.current_plan);
   const existingNodes = usePlanStore((s) => s.nodes);
@@ -100,6 +111,9 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
       setFilter('');
       setImporting(false);
       setImportResult(null);
+      setMqttBroker('mqtt.meshtastic.org');
+      setMqttDuration(15);
+      setMqttCountdown(null);
     }
   }, [isOpen]);
 
@@ -123,22 +137,46 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
   const handleFetch = useCallback(async (source: Source) => {
     setLoading(true);
     setFetchError(null);
+
     try {
-      const data = await apiGet<{ nodes: MapNode[]; count: number; source: string }>(
-        `/import/internet-map?source=${source}`
-      );
+      let data: { nodes: MapNode[]; count: number; source: string };
+
+      if (source === 'meshtastic') {
+        // MQTT: long-running request — show countdown
+        const totalSecs = mqttDuration;
+        setMqttCountdown(totalSecs);
+        const interval = setInterval(() => {
+          setMqttCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        try {
+          const params = new URLSearchParams({
+            broker: mqttBroker,
+            duration: String(totalSecs),
+          });
+          data = await apiGet<{ nodes: MapNode[]; count: number; source: string }>(
+            `/import/meshtastic-mqtt?${params.toString()}`
+          );
+        } finally {
+          clearInterval(interval);
+          setMqttCountdown(null);
+        }
+      } else {
+        data = await apiGet<{ nodes: MapNode[]; count: number; source: string }>(
+          `/import/internet-map?source=${source}`
+        );
+      }
+
       const fetched: MapNode[] = Array.isArray(data.nodes) ? data.nodes : [];
       setMapNodes(fetched);
-      // Pre-select all by default
       setSelected(new Set(fetched.map((_: MapNode, i: number) => i)));
       setPhase('preview');
     } catch (err: any) {
-      const msg = err?.message || err?.detail || `Failed to fetch nodes from ${SOURCE_META[source].url}.`;
+      const msg = err?.message || err?.detail || `Failed to fetch nodes.`;
       setFetchError(msg);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [mqttBroker, mqttDuration]);
 
   const handleSelectAll = useCallback(() => {
     setSelected(new Set(filteredNodes.map((n) => mapNodes.indexOf(n))));
@@ -255,6 +293,11 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
               activeSource={selectedSource}
               onSourceSelect={setSelectedSource}
               onFetch={() => handleFetch(selectedSource)}
+              mqttBroker={mqttBroker}
+              mqttDuration={mqttDuration}
+              mqttCountdown={mqttCountdown}
+              onMqttBrokerChange={setMqttBroker}
+              onMqttDurationChange={setMqttDuration}
             />
           )}
           {phase === 'preview' && (
@@ -288,9 +331,14 @@ interface PhaseSelectProps {
   activeSource: Source;
   onSourceSelect: (s: Source) => void;
   onFetch: () => void;
+  mqttBroker: string;
+  mqttDuration: number;
+  mqttCountdown: number | null;
+  onMqttBrokerChange: (v: string) => void;
+  onMqttDurationChange: (v: number) => void;
 }
 
-function PhaseSelect({ loading, error, activeSource, onSourceSelect, onFetch }: PhaseSelectProps) {
+function PhaseSelect({ loading, error, activeSource, onSourceSelect, onFetch, mqttBroker, mqttDuration, mqttCountdown, onMqttBrokerChange, onMqttDurationChange }: PhaseSelectProps) {
   return (
     <div className="imim-phase-select">
       <p className="imim-section-label">Choose a map source</p>
@@ -332,7 +380,59 @@ function PhaseSelect({ loading, error, activeSource, onSourceSelect, onFetch }: 
             discovered nodes with coordinates and radio parameters.
           </p>
         </button>
+
+        {/* Meshtastic MQTT */}
+        <button
+          type="button"
+          className={`imim-source-card${activeSource === 'meshtastic' ? ' imim-source-card--active' : ''}`}
+          onClick={() => onSourceSelect('meshtastic')}
+          aria-pressed={activeSource === 'meshtastic'}
+        >
+          <div className="imim-source-card-header">
+            <img src={meshtasticIcon} className="imim-source-icon" alt="" aria-hidden="true" />
+            <span className="imim-source-name">Meshtastic MQTT</span>
+            <span className="imim-source-badge imim-source-badge--live">Live</span>
+          </div>
+          <p className="imim-source-url">mqtt.meshtastic.org</p>
+          <p className="imim-source-desc">
+            Connects to a Meshtastic MQTT broker and listens for nodeinfo and position messages.
+            Works with the public Meshtastic broker or your own local broker.
+          </p>
+        </button>
       </div>
+
+      {activeSource === 'meshtastic' && (
+        <div className="imim-mqtt-config" style={{ marginTop: '0.75rem' }}>
+          <label htmlFor="mqttBroker" style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem' }}>
+            MQTT Broker
+          </label>
+          <input
+            id="mqttBroker"
+            type="text"
+            value={mqttBroker}
+            onChange={(e) => onMqttBrokerChange(e.target.value.trim())}
+            placeholder="mqtt.meshtastic.org"
+            style={{ width: '100%', marginBottom: '0.5rem', padding: '0.25rem 0.5rem', boxSizing: 'border-box' }}
+          />
+          <label htmlFor="mqttDuration" style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem' }}>
+            Listen duration: {mqttDuration}s
+          </label>
+          <input
+            id="mqttDuration"
+            type="range"
+            min={5}
+            max={60}
+            step={5}
+            value={mqttDuration}
+            onChange={(e) => onMqttDurationChange(Number(e.target.value))}
+            style={{ width: '100%' }}
+          />
+          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted, #888)', marginTop: '0.25rem' }}>
+            Nodes must be publishing to the JSON MQTT topic (<code>msh/+/+/json/#</code>).
+            Uses the public Meshtastic broker by default — or enter your local broker's IP address.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="imim-error" role="alert">
@@ -349,7 +449,11 @@ function PhaseSelect({ loading, error, activeSource, onSourceSelect, onFetch }: 
           title={`Fetch nodes from ${SOURCE_META[activeSource].url}`}
         >
           {loading ? (
-            <><span className="imim-spinner" aria-hidden="true" /> Fetching&hellip;</>
+            mqttCountdown !== null ? (
+              <><span className="imim-spinner" aria-hidden="true" /> Listening for Meshtastic nodes&hellip; {mqttCountdown}s remaining</>
+            ) : (
+              <><span className="imim-spinner" aria-hidden="true" /> Fetching&hellip;</>
+            )
           ) : (
             'Fetch Nodes'
           )}

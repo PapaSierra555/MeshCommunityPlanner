@@ -12,7 +12,12 @@ and to keep external network calls server-side.
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+import secrets
+import threading
+import time
 from typing import Any
 
 import httpx
@@ -26,6 +31,9 @@ router = APIRouter()
 MESHCORE_API_URL = "https://map.meshcore.dev/api/v1/nodes?binary=1&short=1"
 RETICULUM_SUBMITTED_URL = "https://directory.rns.recipes/api/directory/submitted"
 RETICULUM_DISCOVERED_URL = "https://directory.rns.recipes/api/directory/discovered"
+MESHTASTIC_MQTT_DEFAULT_BROKER = "mqtt.meshtastic.org"
+MESHTASTIC_MQTT_DEFAULT_TOPIC = "msh/+/+/json/#"
+MESHTASTIC_MQTT_DEFAULT_PORT = 1883
 
 # Node type labels from the MeshCore map source
 _NODE_TYPE_LABELS: dict[int, str] = {
@@ -210,6 +218,130 @@ def _normalize_reticulum_nodes(raw_nodes: list[Any]) -> list[dict[str, Any]]:
         )
 
     return normalized
+
+
+def _collect_meshtastic_mqtt(broker: str, port: int, topic: str, duration: int) -> dict[str, dict]:
+    """Connect to an MQTT broker, subscribe to Meshtastic JSON topic, collect nodes.
+
+    Runs in a thread executor (blocking). Returns dict keyed by node_id str.
+    Raises ValueError on connection failure.
+    """
+    try:
+        import paho.mqtt.client as mqtt
+    except ImportError:
+        raise ValueError("paho-mqtt is not installed. Run: pip install paho-mqtt")
+
+    nodes: dict[str, dict] = {}
+    connect_event = threading.Event()
+    connect_error: list[str] = []
+
+    def on_connect(client, userdata, flags, reason_code, properties=None):
+        if hasattr(reason_code, 'value'):
+            rc = reason_code.value
+        else:
+            rc = int(reason_code)
+        if rc == 0:
+            client.subscribe(topic)
+            connect_event.set()
+        else:
+            connect_error.append(f"Broker refused connection (code {rc})")
+            connect_event.set()
+
+    def on_message(client, userdata, msg):
+        try:
+            payload = json.loads(msg.payload.decode("utf-8", errors="replace"))
+            msg_type = payload.get("type")
+            from_id = str(payload.get("from", "")).strip()
+            if not from_id or from_id == "0":
+                return
+            data = payload.get("payload") or {}
+
+            if msg_type == "nodeinfo":
+                name = (data.get("longname") or data.get("shortname") or "").strip()
+                if not name:
+                    name = f"Meshtastic-{from_id}"
+                entry = nodes.setdefault(from_id, {"name": name, "lat": None, "lon": None, "description": ""})
+                entry["name"] = name
+                hw = data.get("hardware")
+                if hw is not None:
+                    entry["description"] = f"Hardware model {hw}"
+
+            elif msg_type == "position":
+                lat_i = data.get("latitude_i")
+                lon_i = data.get("longitude_i")
+                if lat_i is not None and lon_i is not None:
+                    lat = lat_i / 1e7
+                    lon = lon_i / 1e7
+                    if -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0 and not (lat == 0.0 and lon == 0.0):
+                        entry = nodes.setdefault(from_id, {"name": f"Meshtastic-{from_id}", "lat": None, "lon": None, "description": ""})
+                        entry["lat"] = round(lat, 6)
+                        entry["lon"] = round(lon, 6)
+        except Exception:
+            pass
+
+    try:
+        client_id = f"meshplanner_{secrets.token_hex(4)}"
+        try:
+            # paho-mqtt 2.x
+            client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id)
+        except AttributeError:
+            # paho-mqtt 1.x fallback
+            client = mqtt.Client(client_id=client_id)
+        client.on_connect = on_connect
+        client.on_message = on_message
+        client.connect(broker, port, keepalive=60)
+    except Exception as exc:
+        raise ValueError(f"Cannot connect to {broker}:{port} — {exc}")
+
+    client.loop_start()
+    connected = connect_event.wait(timeout=10)
+    if not connected or connect_error:
+        client.loop_stop()
+        client.disconnect()
+        raise ValueError(connect_error[0] if connect_error else f"Timed out connecting to {broker}:{port}")
+
+    time.sleep(duration)
+    client.loop_stop()
+    client.disconnect()
+    return nodes
+
+
+@router.get("/import/meshtastic-mqtt")
+async def fetch_meshtastic_mqtt_nodes(
+    broker: str = Query(default=MESHTASTIC_MQTT_DEFAULT_BROKER, description="MQTT broker hostname or IP"),
+    port: int = Query(default=MESHTASTIC_MQTT_DEFAULT_PORT, ge=1, le=65535, description="MQTT broker port"),
+    topic: str = Query(default=MESHTASTIC_MQTT_DEFAULT_TOPIC, description="MQTT topic filter"),
+    duration: int = Query(default=15, ge=5, le=60, description="Listen duration in seconds"),
+) -> dict[str, Any]:
+    """Collect Meshtastic node positions via MQTT and return normalized node list.
+
+    Subscribes to the broker for `duration` seconds, collects nodeinfo and position
+    messages, and returns nodes that have both a name and GPS coordinates.
+    """
+    loop = asyncio.get_event_loop()
+    try:
+        nodes_dict = await loop.run_in_executor(
+            None, _collect_meshtastic_mqtt, broker, port, topic, duration
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    result = [
+        {
+            "name": v["name"],
+            "lat": v["lat"],
+            "lon": v["lon"],
+            "description": v.get("description", ""),
+        }
+        for v in nodes_dict.values()
+        if v.get("lat") is not None and v.get("lon") is not None
+    ]
+
+    logger.info(
+        "Meshtastic MQTT import: %d raw nodes tracked, %d with position",
+        len(nodes_dict), len(result),
+    )
+    return {"source": "meshtastic_mqtt", "nodes": result, "count": len(result)}
 
 
 @router.get("/import/internet-map/ping")
