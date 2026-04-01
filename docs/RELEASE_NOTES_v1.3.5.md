@@ -6,7 +6,9 @@
 
 Pull live node positions directly from a Meshtastic MQTT broker.
 
-Open **File → Import from Map** and select the **Meshtastic MQTT** source. Enter your broker URL (defaults to `mqtt.meshtastic.org` for the public Meshtastic network, or your local broker's IP address), set a listen duration (5–60 seconds), and click **Fetch**. The app subscribes to the JSON MQTT topic (`msh/+/+/json/#`), collects nodeinfo and GPS position messages, and shows a filterable preview of all located nodes. Select the ones you want and import them into your plan in one step.
+Open **Plan → Import Nodes (Internet)** and select the **Meshtastic MQTT** source. Enter your broker URL (defaults to `mqtt.meshtastic.org` for the public Meshtastic network, or your local broker's IP address), set a listen duration (5–60 seconds), and click **Fetch**. The app subscribes to the JSON MQTT topic (`msh/+/+/json/#`), collects nodeinfo and GPS position messages, and shows a filterable preview of all located nodes. Select the ones you want and import them into your plan in one step.
+
+![Meshtastic MQTT import dialog showing the source card selected, broker URL input, and duration slider](https://raw.githubusercontent.com/PapaSierra555/MeshCommunityPlanner/main/docs/screenshots/MeshtasticMQTT.png)
 
 Nodes are imported with the same radio defaults as your existing plan nodes — antenna height, device, firmware family, region — so they're ready for coverage analysis immediately.
 
@@ -21,6 +23,8 @@ The coverage analysis radius slider now allows up to **200 km**.
 Previously the slider was hard-capped to the radio horizon formula for the node's configured antenna height, which gave approximately 11–15 km for typical ground-level deployments. The formula is still shown as a guidance label ("Radio horizon at X m: ~Y km") but is no longer a hard ceiling.
 
 For mountain-top and elevated relay nodes: set the **Antenna Height** field to reflect actual clearance above surrounding terrain — not altitude above sea level, but how many meters the antenna clears nearby obstacles. At 50 m clearance the recommended horizon is ~34 km; at 200 m it's ~64 km. The slider can be set beyond the formula up to 200 km absolute maximum.
+
+![Coverage radius slider set to 102 km with radio horizon guidance label visible](https://raw.githubusercontent.com/PapaSierra555/MeshCommunityPlanner/main/docs/screenshots/MaxRadius.png)
 
 > **Physics note:** LoRa at legal power limits can realistically reach 80–150 km mountain-to-mountain with high-gain antennas. Beyond ~200 km, earth curvature becomes the dominant constraint regardless of software settings.
 
