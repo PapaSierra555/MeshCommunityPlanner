@@ -154,6 +154,7 @@ export function MapContainer({ className = '' }: MapContainerProps) {
   const coverageOpacity = useMapStore((s) => s.coverageOpacity);
   const coverageHatchMode = useMapStore((s) => s.coverageHatchMode);
   const satelliteMode = useMapStore((s) => s.satelliteMode);
+  const lockNodePositions = useMapStore((s) => s.lockNodePositions);
   const elevationLayerEnabled = useMapStore((s) => s.elevation_layer_enabled);
   const elevationOpacity = useMapStore((s) => s.elevationOpacity);
   const elevationMin = useMapStore((s) => s.elevationMin);
@@ -241,12 +242,14 @@ export function MapContainer({ className = '' }: MapContainerProps) {
 
   // Handle marker drag start - record initial position for group drag
   const handleMarkerDragStart = useCallback((_nodeId: string, e: L.LeafletEvent) => {
+    if (useMapStore.getState().lockNodePositions) return;
     const marker = e.target as L.Marker;
     dragStartPosRef.current = marker.getLatLng();
   }, []);
 
   // Handle marker drag end - GROUP DRAG: update ALL selected node positions locally first, then API
   const handleMarkerDragEnd = useCallback(async (nodeId: string, e: L.DragEndEvent) => {
+    if (useMapStore.getState().lockNodePositions) return;
     const latlng = (e.target as L.Marker).getLatLng();
     const plan = usePlanStore.getState().current_plan;
     const currentSelectedIds = useMapStore.getState().selected_node_ids;
@@ -413,10 +416,12 @@ export function MapContainer({ className = '' }: MapContainerProps) {
         existingMarker.bindTooltip(node.name, { permanent: true, direction: 'top', offset: [0, -42], className: 'node-label-tooltip' });
         const existingEl = existingMarker.getElement();
         if (existingEl) existingEl.setAttribute('aria-label', `Node: ${node.name}`);
+        if (lockNodePositions) existingMarker.dragging?.disable();
+        else existingMarker.dragging?.enable();
       } else {
         const marker = L.marker([node.latitude, node.longitude], {
           icon: createNodeIcon(isPrimarySelected, isMultiSelected && !isPrimarySelected),
-          draggable: true,
+          draggable: !lockNodePositions,
         })
           .bindPopup(
             `<b>${node.name}</b><br>` +
@@ -453,7 +458,7 @@ export function MapContainer({ className = '' }: MapContainerProps) {
         markersRef.current.set(nodeId, marker);
       }
     });
-  }, [nodes, selectedNodeId, selectedNodeIds, selectNode, toggleNodeSelection, handleMarkerDragStart, handleMarkerDragEnd]);
+  }, [nodes, selectedNodeId, selectedNodeIds, selectNode, toggleNodeSelection, handleMarkerDragStart, handleMarkerDragEnd, lockNodePositions]);
 
   // Build popup HTML for a LOS overlay
   const buildLOSPopupHtml = useCallback((los: typeof losOverlays[number]) => {

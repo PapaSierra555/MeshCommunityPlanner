@@ -195,6 +195,9 @@ export interface MapState {
   // Satellite base tile layer
   satelliteMode: boolean;
 
+  // When true, map markers cannot be dragged. Session only; persisted via .meshplan.json export/import, not localStorage.
+  lockNodePositions: boolean;
+
   // Map invalidation (triggers invalidateSize after sidebar toggle)
   map_invalidate_counter: number;
 
@@ -238,6 +241,7 @@ export interface MapState {
   setCoverageOpacity: (opacity: number) => void;
   setCoverageHatchMode: (enabled: boolean) => void;
   setSatelliteMode: (enabled: boolean) => void;
+  setLockNodePositions: (locked: boolean) => void;
   setElevationLayerEnabled: (enabled: boolean) => void;
   setElevationOpacity: (opacity: number) => void;
   setElevationRange: (min: number, max: number) => void;
@@ -316,6 +320,7 @@ const initialState = {
   coverageOpacity: 0.7,
   coverageHatchMode: false,
   satelliteMode: false,
+  lockNodePositions: false,
   map_invalidate_counter: 0,
   fit_bounds_counter: 0,
   fit_bounds: null as [[number, number], [number, number]] | null,
@@ -419,6 +424,7 @@ export const useMapStore = create<MapState>((set) => ({
   setCoverageOpacity: (opacity) => set({ coverageOpacity: opacity }),
   setCoverageHatchMode: (enabled) => set({ coverageHatchMode: enabled }),
   setSatelliteMode: (enabled) => set({ satelliteMode: enabled }),
+  setLockNodePositions: (locked) => set({ lockNodePositions: locked }),
   setElevationLayerEnabled: (enabled) => set({ elevation_layer_enabled: enabled }),
   setElevationOpacity: (opacity) => set({ elevationOpacity: opacity }),
   setElevationRange: (min, max) => set({ elevationMin: min, elevationMax: max }),
