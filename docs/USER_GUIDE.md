@@ -1,6 +1,6 @@
 # Mesh Community Planner — User Guide
 
-**Version:** 1.3.3
+**Version:** 1.3.5
 **Last Updated:** March 2026
 
 ---
@@ -162,6 +162,10 @@ After completing the wizard, the node appears on the map with an FSPL coverage c
 ### Moving a Node
 
 Drag the node marker to a new position on the map. The FSPL coverage circle updates automatically. If you have multiple nodes selected, dragging one moves the entire group.
+
+### Lock Node Positions
+
+**Lock Node Positions** — Found in the node sidebar when any node is selected. When checked, all nodes on the map become non-draggable. This is a plan-level setting that applies to all nodes, not just the selected one. The lock state is saved in exported .meshplan.json files and restored on import.
 
 ### Deleting a Node
 
@@ -703,6 +707,19 @@ Pull live node locations directly from an online mesh network directory:
 
 **Offline guard:** The button is automatically disabled and labeled "(offline)" when no internet connection is detected. Map tiles and terrain analysis continue to work offline — only the live directory import requires connectivity.
 
+### Meshtastic MQTT Import
+
+**Meshtastic MQTT** — Enter a broker URL (default: mqtt.meshtastic.org), set a listen duration, and the app subscribes to the JSON MQTT topic, collects nodeinfo and position messages, and shows a preview of GPS-located nodes to import.
+
+1. Open the **File → Import from Map** dialog
+2. Select the **Meshtastic MQTT** source
+3. Enter your broker URL (defaults to `mqtt.meshtastic.org` for the public network, or your local broker's IP address)
+4. Set a listen duration (5–60 seconds) and click **Fetch**
+5. Review the list of GPS-located nodes and select the ones to import
+6. Click **Import** to add them to your plan
+
+Nodes are imported with the same radio defaults as your existing plan nodes — antenna height, device, firmware family, region — so they're ready for coverage analysis immediately.
+
 ### KML — Google Earth / Field Apps
 
 Plan menu → **Export Plan (KML)** creates a `.kml` file and opens a guide with import instructions for compatible apps:
@@ -882,4 +899,4 @@ For technical terms, see the [Technical Glossary](TECHNICAL-GLOSSARY.md).
 For answers to common questions, see the [FAQ](FAQ.md).
 
 *Last Updated: March 2026*
-*Version: 1.3.3*
+*Version: 1.3.5*

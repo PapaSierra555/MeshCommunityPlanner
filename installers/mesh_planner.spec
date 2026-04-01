@@ -238,8 +238,8 @@ if sys.platform == "darwin":
         bundle_identifier="com.meshcommunityplanner.app",
         info_plist={
             "CFBundleDisplayName": "Mesh Community Planner",
-            "CFBundleVersion": "1.3.2",
-            "CFBundleShortVersionString": "1.3.2",
+            "CFBundleVersion": "1.3.5",
+            "CFBundleShortVersionString": "1.3.5",
             "LSMinimumSystemVersion": "11.0",
             "NSHighResolutionCapable": True,
             "LSApplicationCategoryType": "public.app-category.utilities",

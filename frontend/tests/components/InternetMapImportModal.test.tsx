@@ -483,4 +483,64 @@ describe('InternetMapImportModal', () => {
       expect(results.violations).toEqual([]);
     });
   });
+
+  // ---- Meshtastic MQTT source ----
+
+  describe('Meshtastic MQTT source card', () => {
+    beforeEach(() => {
+      vi.stubGlobal('fetch', makeFetchOk());
+    });
+
+    it('renders the Meshtastic MQTT source card', () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      expect(screen.getByText('Meshtastic MQTT')).toBeTruthy();
+    });
+
+    it('clicking Meshtastic card shows broker URL input', () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /meshtastic mqtt/i }));
+      const brokerInput = screen.getByPlaceholderText('mqtt.meshtastic.org');
+      expect(brokerInput).toBeTruthy();
+    });
+
+    it('broker URL input defaults to mqtt.meshtastic.org', () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /meshtastic mqtt/i }));
+      const brokerInput = screen.getByPlaceholderText('mqtt.meshtastic.org') as HTMLInputElement;
+      expect(brokerInput.value).toBe('mqtt.meshtastic.org');
+    });
+
+    it('duration slider is present when meshtastic source selected', () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /meshtastic mqtt/i }));
+      const slider = document.querySelector('#mqttDuration') as HTMLInputElement;
+      expect(slider).not.toBeNull();
+      expect(slider.type).toBe('range');
+    });
+
+    it('shows countdown text during loading when meshtastic selected', async () => {
+      // Use a never-resolving fetch to hold in loading state
+      vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise(() => {})));
+      render(<InternetMapImportModal {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /meshtastic mqtt/i }));
+      const fetchBtn = screen.getByRole('button', { name: /fetch nodes/i });
+      fireEvent.click(fetchBtn);
+      await waitFor(() => {
+        expect(screen.getByText(/listening for meshtastic nodes/i)).toBeTruthy();
+      });
+    });
+
+    it('clicking Meshtastic card sets it as active (aria-pressed=true)', () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      const meshtasticBtn = screen.getByRole('button', { name: /meshtastic mqtt/i });
+      fireEvent.click(meshtasticBtn);
+      expect(meshtasticBtn.getAttribute('aria-pressed')).toBe('true');
+    });
+
+    it('clicking Meshtastic card updates the modal title', () => {
+      render(<InternetMapImportModal {...defaultProps} />);
+      fireEvent.click(screen.getByRole('button', { name: /meshtastic mqtt/i }));
+      expect(screen.getByText('Import Nodes — Meshtastic MQTT')).toBeTruthy();
+    });
+  });
 });

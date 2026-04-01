@@ -1,6 +1,6 @@
 # Mesh Community Planner -- Build & Installation Guide
 
-**Version:** 1.3.4
+**Version:** 1.3.5
 **Date:** 2026-03-31
 
 ---
@@ -99,7 +99,7 @@ curl http://127.0.0.1:8321/api/health
 
 ## macOS
 
-> **macOS downloads:** Two DMGs are available — `MeshCommunityPlanner-1.3.3.dmg` (Apple Silicon / M1–M4) and `MeshCommunityPlanner-1.3.3-x86_64.dmg` (Intel). Download the one that matches your Mac's processor. If unsure, click  → About This Mac and check the Chip field.
+> **macOS downloads:** Two DMGs are available — `MeshCommunityPlanner-1.3.5.dmg` (Apple Silicon / M1–M4) and `MeshCommunityPlanner-1.3.5-x86_64.dmg` (Intel). Download the one that matches your Mac's processor. If unsure, click  → About This Mac and check the Chip field.
 
 ### Prerequisites
 
@@ -146,7 +146,7 @@ chmod +x installers/macos/build_dmg.sh
 ./installers/macos/build_dmg.sh
 ```
 
-Output: `installers/dist/MeshCommunityPlanner-1.3.3.dmg`
+Output: `installers/dist/MeshCommunityPlanner-1.3.5.dmg`
 
 To install: mount the DMG, drag "Mesh Community Planner" to Applications.
 
@@ -294,12 +294,12 @@ chmod +x installers/linux/build_appimage.sh
 ./installers/linux/build_appimage.sh
 ```
 
-Output: `dist/MeshCommunityPlanner-1.3.4-x86_64.AppImage` (or `-aarch64.AppImage` on ARM)
+Output: `dist/MeshCommunityPlanner-1.3.5-x86_64.AppImage` (or `-aarch64.AppImage` on ARM)
 
 Run it:
 ```bash
-chmod +x dist/MeshCommunityPlanner-1.3.4-*.AppImage
-./dist/MeshCommunityPlanner-1.3.4-*.AppImage
+chmod +x dist/MeshCommunityPlanner-1.3.5-*.AppImage
+./dist/MeshCommunityPlanner-1.3.5-*.AppImage
 ```
 
 ### Linux Troubleshooting

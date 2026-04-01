@@ -2,7 +2,7 @@
 
 A desktop application for planning LoRa mesh network deployments with terrain-aware RF propagation, hardware selection, and bill of materials generation.
 
-![Version](https://img.shields.io/badge/version-1.3.3-blue)
+![Version](https://img.shields.io/badge/version-1.3.5-blue)
 ![License](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-green)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
@@ -20,11 +20,11 @@ Download the latest release from the [GitHub Releases page](https://github.com/P
 
 | Platform | Format | File |
 |----------|--------|------|
-| **Windows** | Portable (.zip) | `MeshCommunityPlanner-1.3.4-win.zip` |
-| **macOS (Apple Silicon — M1/M2/M3/M4)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.4.dmg` |
-| **macOS (Intel x86_64)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.4-x86_64.dmg` |
-| **Linux (x86_64)** | AppImage | `MeshCommunityPlanner-1.3.4-x86_64.AppImage` |
-| **Linux (aarch64 / arm64)** | AppImage | `MeshCommunityPlanner-1.3.4-aarch64.AppImage` |
+| **Windows** | Portable (.zip) | `MeshCommunityPlanner-1.3.5-win.zip` |
+| **macOS (Apple Silicon — M1/M2/M3/M4)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.5.dmg` |
+| **macOS (Intel x86_64)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.5-x86_64.dmg` |
+| **Linux (x86_64)** | AppImage | `MeshCommunityPlanner-1.3.5-x86_64.AppImage` |
+| **Linux (aarch64 / arm64)** | AppImage | `MeshCommunityPlanner-1.3.5-aarch64.AppImage` |
 
 All downloads are self-contained — no Python or Node.js installation required.
 
@@ -47,6 +47,8 @@ All downloads are self-contained — no Python or Node.js installation required.
 - **Bill of Materials** — Component list with pricing, CSV/PDF export, and deployment cards
 - **Regulatory Presets** — US FCC 915, EU 868, EU 433, ANZ
 - **Internet Map Import** — Pull live node positions from MeshCore Map (`map.meshcore.dev`) and Reticulum Network (`directory.rns.recipes`) directly into your plan; auto-disables when offline
+- **Meshtastic MQTT Import** — Pull live node positions directly from a Meshtastic MQTT broker (public mqtt.meshtastic.org or your own local broker); configure listen duration and import by name
+- **Lock Node Positions** — Prevent accidental node moves with a per-plan toggle; state saved in .meshplan.json
 - **Import/Export** — .meshplan JSON format, CSV node import, KML export
 - **Offline Operation** — Works without internet after initial map/terrain caching
 - **Privacy-First** — All data stays on your machine, no accounts or analytics

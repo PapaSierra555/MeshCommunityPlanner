@@ -661,7 +661,7 @@ export function Toolbar({
           </div>
         </div>
         <nav className="toolbar-actions">
-          <span className="toolbar-version">v1.3.4</span>
+          <span className="toolbar-version">v1.3.5</span>
           <button
             className="toolbar-exit-btn"
             type="button"
@@ -680,7 +680,7 @@ export function Toolbar({
             <div className="appinfo-modal-header">
               <div>
                 <div className="appinfo-title">Mesh Community Planner</div>
-                <div className="appinfo-version">Version 1.3.4</div>
+                <div className="appinfo-version">Version 1.3.5</div>
               </div>
               <button className="appinfo-close" type="button" onClick={() => setOpenMenu(null)} title="Close">&times;</button>
             </div>

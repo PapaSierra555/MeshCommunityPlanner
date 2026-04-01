@@ -689,3 +689,103 @@ class TestSourceValidationReticulum:
         resp = client.get("/api/import/internet-map?source=lora-wan", headers=_auth_headers())
         assert resp.status_code == 400
         assert "supported" in resp.json()["detail"].lower()
+
+
+# ============================================================================
+# Meshtastic MQTT endpoint — /api/import/meshtastic-mqtt
+# ============================================================================
+
+
+@pytest.fixture
+def mock_collect(monkeypatch):
+    """Patch _collect_meshtastic_mqtt and run_in_executor to avoid real MQTT connections."""
+    collect_mock = MagicMock()
+
+    async def fake_run_in_executor(loop_self, executor, func, *args):
+        # loop.run_in_executor(None, func, *args) — executor is None, func is callable
+        return func(*args)
+
+    monkeypatch.setattr("backend.app.api.internet_map._collect_meshtastic_mqtt", collect_mock)
+    monkeypatch.setattr("asyncio.BaseEventLoop.run_in_executor", fake_run_in_executor)
+    return collect_mock
+
+
+class TestMeshtasticMQTT:
+    """Tests for GET /api/import/meshtastic-mqtt."""
+
+    def test_meshtastic_mqtt_paho_not_installed(self, client, mock_collect):
+        """ImportError on paho-mqtt → 503 with explanatory message."""
+        mock_collect.side_effect = ValueError("paho-mqtt is not installed")
+
+        resp = client.get("/api/import/meshtastic-mqtt", headers=_auth_headers())
+
+        assert resp.status_code == 503
+        assert "paho-mqtt is not installed" in resp.json()["detail"]
+
+    def test_meshtastic_mqtt_connection_failure(self, client, mock_collect):
+        """_collect_meshtastic_mqtt raising ValueError → 503."""
+        mock_collect.side_effect = ValueError("Cannot connect to mqtt.meshtastic.org:1883 — Connection refused")
+
+        resp = client.get("/api/import/meshtastic-mqtt", headers=_auth_headers())
+
+        assert resp.status_code == 503
+        assert "Cannot connect" in resp.json()["detail"]
+
+    def test_meshtastic_mqtt_returns_located_nodes(self, client, mock_collect):
+        """_collect_meshtastic_mqtt returning nodes with lat/lon → 200, nodes in response."""
+        mock_collect.return_value = {
+            "abc123": {"name": "Node Alpha", "lat": 25.76, "lon": -80.19, "description": "Hardware model 10"},
+            "def456": {"name": "Node Beta", "lat": 30.33, "lon": -81.65, "description": "Hardware model 12"},
+        }
+
+        resp = client.get("/api/import/meshtastic-mqtt", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["source"] == "meshtastic_mqtt"
+        assert body["count"] == 2
+        assert len(body["nodes"]) == 2
+        names = {n["name"] for n in body["nodes"]}
+        assert names == {"Node Alpha", "Node Beta"}
+
+    def test_meshtastic_mqtt_filters_unlocated_nodes(self, client, mock_collect):
+        """Nodes with lat=None are excluded from the response."""
+        mock_collect.return_value = {
+            "aaa": {"name": "Located", "lat": 25.76, "lon": -80.19, "description": ""},
+            "bbb": {"name": "No Position", "lat": None, "lon": None, "description": ""},
+            "ccc": {"name": "Partial", "lat": 30.0, "lon": None, "description": ""},
+        }
+
+        resp = client.get("/api/import/meshtastic-mqtt", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["count"] == 1
+        assert body["nodes"][0]["name"] == "Located"
+
+    def test_meshtastic_mqtt_default_params(self, client, mock_collect):
+        """Calling endpoint with no query params accepts defaults and returns 200."""
+        mock_collect.return_value = {}
+
+        resp = client.get("/api/import/meshtastic-mqtt", headers=_auth_headers())
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["count"] == 0
+        assert body["nodes"] == []
+
+    def test_meshtastic_mqtt_duration_too_short(self, client):
+        """duration=4 (below ge=5) → 422 validation error."""
+        resp = client.get(
+            "/api/import/meshtastic-mqtt?duration=4",
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 422
+
+    def test_meshtastic_mqtt_duration_too_long(self, client):
+        """duration=61 (above le=60) → 422 validation error."""
+        resp = client.get(
+            "/api/import/meshtastic-mqtt?duration=61",
+            headers=_auth_headers(),
+        )
+        assert resp.status_code == 422
