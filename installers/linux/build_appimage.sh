@@ -5,7 +5,8 @@
 #   - PyInstaller output in dist/MeshCommunityPlanner/
 #   - appimagetool (https://github.com/AppImage/AppImageKit)
 #
-# Output: dist/MeshCommunityPlanner-<version>-x86_64.AppImage
+# Output: dist/MeshCommunityPlanner-<version>-<arch>.AppImage
+#         Arch is detected automatically via uname -m (x86_64 or aarch64).
 #         Set APP_VERSION env var to override default (e.g. from CI).
 
 set -euo pipefail
@@ -15,7 +16,8 @@ INSTALLERS_DIR="$(dirname "$SCRIPT_DIR")"
 PROJECT_ROOT="$(dirname "$INSTALLERS_DIR")"
 
 APP_NAME="MeshCommunityPlanner"
-APP_VERSION="${APP_VERSION:-1.3.3}"
+APP_VERSION="${APP_VERSION:-1.3.4}"
+ARCH="$(uname -m)"
 PYINSTALLER_DIST="${PROJECT_ROOT}/dist/MeshCommunityPlanner"
 APPDIR="${PROJECT_ROOT}/dist/${APP_NAME}.AppDir"
 
@@ -108,18 +110,22 @@ APPRUN_EOF
 chmod +x "${APPDIR}/AppRun"
 
 # Build the AppImage
-APPIMAGE_OUTPUT="${PROJECT_ROOT}/dist/${APP_NAME}-${APP_VERSION}-x86_64.AppImage"
+APPIMAGE_OUTPUT="${PROJECT_ROOT}/dist/${APP_NAME}-${APP_VERSION}-${ARCH}.AppImage"
 
 if command -v appimagetool &> /dev/null; then
-    echo "[INFO] Creating AppImage with appimagetool..."
-    ARCH=x86_64 appimagetool "${APPDIR}" "${APPIMAGE_OUTPUT}"
+    echo "[INFO] Creating AppImage with appimagetool (arch: ${ARCH})..."
+    ARCH="${ARCH}" appimagetool "${APPDIR}" "${APPIMAGE_OUTPUT}"
 else
     echo "[WARN] appimagetool not found. Install from:"
     echo "  https://github.com/AppImage/AppImageKit/releases"
     echo ""
+    echo "  # x86_64:"
     echo "  wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
-    echo "  chmod +x appimagetool-x86_64.AppImage"
-    echo "  sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool"
+    echo "  chmod +x appimagetool-x86_64.AppImage && sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool"
+    echo ""
+    echo "  # aarch64:"
+    echo "  wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-aarch64.AppImage"
+    echo "  chmod +x appimagetool-aarch64.AppImage && sudo mv appimagetool-aarch64.AppImage /usr/local/bin/appimagetool"
     echo ""
     echo "[INFO] AppDir created at ${APPDIR} — run appimagetool manually"
     exit 1

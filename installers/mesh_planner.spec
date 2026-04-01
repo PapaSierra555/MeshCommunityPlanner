@@ -47,7 +47,16 @@ migrations_dir = PROJECT_ROOT / "backend" / "app" / "db" / "migrations"
 if migrations_dir.is_dir():
     datas.append((str(migrations_dir), "backend/app/db/migrations"))
 
-# Signal-Server binary
+# Signal-Server binary (optional — not included in the public repository)
+#
+# Signal-Server is a third-party RF propagation binary (W3AXL fork of
+# CloudRF/Signal-Server: https://github.com/Cloud-RF/Signal-Server).
+# Pre-built binaries are not redistributed here due to licensing.
+#
+# To bundle it: place the platform binary at bin/signal-server/<platform>/
+# and rebuild. Without it, the app falls back to the system PATH for
+# `signalserver`. If absent entirely, terrain propagation analysis is
+# unavailable but the rest of the app functions normally.
 if signal_server_src.is_dir():
     datas.append((str(signal_server_src), "bin/signal-server"))
 

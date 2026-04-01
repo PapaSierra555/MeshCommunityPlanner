@@ -20,12 +20,15 @@ Download the latest release from the [GitHub Releases page](https://github.com/P
 
 | Platform | Format | File |
 |----------|--------|------|
-| **Windows** | Portable (.zip) | `MeshCommunityPlanner-1.3.3-win.zip` |
-| **macOS (Apple Silicon — M1/M2/M3/M4)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.3.dmg` |
-| **macOS (Intel x86_64)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.3-x86_64.dmg` |
-| **Linux** | AppImage | `MeshCommunityPlanner-1.3.3-x86_64.AppImage` |
+| **Windows** | Portable (.zip) | `MeshCommunityPlanner-1.3.4-win.zip` |
+| **macOS (Apple Silicon — M1/M2/M3/M4)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.4.dmg` |
+| **macOS (Intel x86_64)** | Disk image (.dmg) | `MeshCommunityPlanner-1.3.4-x86_64.dmg` |
+| **Linux (x86_64)** | AppImage | `MeshCommunityPlanner-1.3.4-x86_64.AppImage` |
+| **Linux (aarch64 / arm64)** | AppImage | `MeshCommunityPlanner-1.3.4-aarch64.AppImage` |
 
 All downloads are self-contained — no Python or Node.js installation required.
+
+> **Linux architecture note:** Download the file matching your CPU. Run `uname -m` if unsure — `x86_64` is the standard PC/laptop architecture; `aarch64` covers Raspberry Pi 4/5, Qualcomm Snapdragon X, and other 64-bit ARM boards and devices.
 
 > **macOS note:** On first launch, macOS will show a security warning — this is expected for unsigned apps. See [Opening on macOS](#opening-on-macos) below.
 

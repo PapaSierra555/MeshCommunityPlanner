@@ -1,7 +1,7 @@
 # Mesh Community Planner -- Build & Installation Guide
 
-**Version:** 1.3.3
-**Date:** 2026-03-18
+**Version:** 1.3.4
+**Date:** 2026-03-31
 
 ---
 
@@ -17,10 +17,12 @@ To **build from source**, you need Python, Node.js, and PyInstaller.
 
 ### To Run the Built Application
 
-- **Windows 10/11** (64-bit), **macOS 11+** (Big Sur), or **Linux** (Ubuntu 20.04+, Fedora 35+)
+- **Windows 10/11** (64-bit), **macOS 11+** (Big Sur), or **Linux** (Ubuntu 20.04+ / Fedora 35+, x86_64 or aarch64)
 - 4 GB RAM, 500 MB disk space
-- Internet connection (for map tiles and elevation data)
+- Internet connection (for map tiles and elevation data on first use)
 - Browser: Chrome 100+, Edge 100+, Firefox 98+, or Safari 15+
+
+> **Linux architecture:** Two AppImage builds are provided — `x86_64` (standard PC/laptop) and `aarch64` (Raspberry Pi 4/5, Qualcomm Snapdragon X, and other 64-bit ARM). Run `uname -m` to check your architecture.
 
 ### To Build from Source
 
@@ -274,22 +276,30 @@ xdg-open http://127.0.0.1:8321
 
 ### Build AppImage (optional)
 
-Creates a portable single-file executable:
+Creates a portable single-file executable. The script detects your architecture automatically (`x86_64` or `aarch64`).
 
 ```bash
 # Install appimagetool first:
 # https://github.com/AppImage/AppImageKit/releases
 
+# x86_64:
+wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+chmod +x appimagetool-x86_64.AppImage && sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
+
+# aarch64 (Raspberry Pi 4/5, Snapdragon X, etc.):
+wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-aarch64.AppImage
+chmod +x appimagetool-aarch64.AppImage && sudo mv appimagetool-aarch64.AppImage /usr/local/bin/appimagetool
+
 chmod +x installers/linux/build_appimage.sh
 ./installers/linux/build_appimage.sh
 ```
 
-Output: `dist/MeshCommunityPlanner-1.2.0-x86_64.AppImage`
+Output: `dist/MeshCommunityPlanner-1.3.4-x86_64.AppImage` (or `-aarch64.AppImage` on ARM)
 
 Run it:
 ```bash
-chmod +x dist/MeshCommunityPlanner-1.2.0-x86_64.AppImage
-./dist/MeshCommunityPlanner-1.2.0-x86_64.AppImage
+chmod +x dist/MeshCommunityPlanner-1.3.4-*.AppImage
+./dist/MeshCommunityPlanner-1.3.4-*.AppImage
 ```
 
 ### Linux Troubleshooting
@@ -300,6 +310,58 @@ chmod +x dist/MeshCommunityPlanner-1.2.0-x86_64.AppImage
 | Missing `libglib-2.0` | `sudo apt install libglib2.0-0` |
 | Permission denied on AppImage | `chmod +x *.AppImage` |
 | Port 8321 in use | `lsof -i :8321` then `kill <PID>` |
+
+---
+
+## Signal-Server (RF Propagation Engine)
+
+Mesh Community Planner uses **Signal-Server** for terrain-aware RF propagation analysis (coverage heatmaps, Longley-Rice/ITWOM modeling). This is an optional external binary — the rest of the app (node placement, LoS profiles, BOM generation, topology analysis) works normally without it.
+
+### What it is
+
+Signal-Server is the [W3AXL fork](https://github.com/Cloud-RF/Signal-Server) of the open-source CloudRF/Signal-Server RF propagation engine. It is invoked as a subprocess by the backend and returns coverage data over SRTM elevation terrain.
+
+### How the app finds it
+
+The app looks for the `signalserver` binary in two places, in order:
+
+1. **Bundled binary** — `bin/signal-server/<platform>/signal-server[.exe]` relative to the executable. Pre-built binaries are not included in this repository (licensing). Pre-built releases on the GitHub Releases page do not bundle Signal-Server either.
+2. **System PATH** — if no bundled binary is found, the app falls back to whatever `signalserver` resolves to on your PATH.
+
+If neither is found, terrain propagation analysis is unavailable. A clear error is shown in the UI when you attempt to run a coverage analysis; all other features remain functional.
+
+### Installing Signal-Server
+
+Build from source (Linux/macOS):
+
+```bash
+git clone https://github.com/Cloud-RF/Signal-Server.git
+cd Signal-Server
+make
+sudo cp signalserver /usr/local/bin/
+```
+
+Windows users can cross-compile via WSL or use a pre-built binary from the Signal-Server releases page.
+
+After installing, verify:
+
+```bash
+signalserver --help
+```
+
+### Bundling it with your own build
+
+Place the platform binary at the path the spec expects, then rebuild PyInstaller:
+
+```
+bin/
+  signal-server/
+    linux/signal-server
+    macos/signal-server
+    windows/signal-server.exe
+```
+
+The spec will detect the directory and bundle the binary automatically.
 
 ---
 
@@ -369,4 +431,4 @@ MeshCommunityPlanner/
 
 ---
 
-*Last Updated: 2026-03-12*
+*Last Updated: 2026-03-31*
