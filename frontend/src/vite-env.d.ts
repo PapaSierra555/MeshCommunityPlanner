@@ -7,12 +7,12 @@ declare module '*.svg' {
 /// <reference types="react" />
 /// <reference types="react-dom" />
 
-/** Build-time constant injected by Vite — changes every build. */
-declare const __BUILD_ID__: string;
-
 import type { ReactElement, ReactNode } from 'react';
 
 declare global {
+  /** Build-time constant injected by Vite; changes every build. */
+  const __BUILD_ID__: string;
+
   namespace JSX {
     interface Element extends ReactElement<any, any> {}
     interface IntrinsicElements {

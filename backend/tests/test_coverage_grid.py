@@ -288,6 +288,33 @@ class TestCoverageGridRadioHorizon:
         # los_elevated should produce more coverage points (less loss)
         assert len(los_result["points"]) > len(suburban_result["points"])
 
+    def test_calibration_offset_shifts_signal_grid(self):
+        """Field calibration offset is applied to every modeled signal point."""
+        common_kwargs = dict(
+            tx_lat=41.0,
+            tx_lon=-74.0,
+            antenna_height_m=10.0,
+            frequency_mhz=915.0,
+            tx_power_dbm=20.0,
+            antenna_gain_dbi=2.0,
+            cable_loss_db=0.0,
+            receiver_sensitivity_dbm=-130.0,
+            read_elevation=_flat_reader(0.0),
+            environment="los_elevated",
+            num_radials=4,
+            max_radius_m=1_000.0,
+            sample_interval_m=100.0,
+        )
+
+        raw = compute_terrain_coverage_grid(**common_kwargs, calibration_offset_db=0.0)
+        calibrated = compute_terrain_coverage_grid(**common_kwargs, calibration_offset_db=-6.0)
+
+        assert calibrated["stats"]["calibration_offset_db"] == -6.0
+        assert calibrated["points"][0]["signal_dbm"] == pytest.approx(
+            raw["points"][0]["signal_dbm"] - 6.0,
+            abs=0.2,
+        )
+
 
 class TestCoverageGridElevationSource:
     def test_none_reads_produce_flat_terrain_source(self):

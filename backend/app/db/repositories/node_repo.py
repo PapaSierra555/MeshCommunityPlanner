@@ -49,6 +49,13 @@ class NodeRepository:
         notes: str = "",
         environment: str = "suburban",
         coverage_environment: Optional[str] = None,
+        visibility: str = "private",
+        coordinate_precision: str = "exact",
+        node_role: str = "planned",
+        node_status: str = "planned",
+        site_id: Optional[str] = None,
+        mount_id: Optional[str] = None,
+        radio_profile_id: Optional[str] = None,
         sort_order: int = 0
     ) -> str:
         """
@@ -92,15 +99,17 @@ class NodeRepository:
                 spreading_factor, bandwidth_khz, coding_rate, modem_preset,
                 antenna_id, cable_id, cable_length_m, pa_module_id, is_solar,
                 desired_coverage_radius_m, notes, environment, coverage_environment,
-                sort_order, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                visibility, coordinate_precision, node_role, node_status,
+                site_id, mount_id, radio_profile_id, sort_order, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             node_id, plan_id, name, latitude, longitude, antenna_height_m,
             device_id, firmware, region, frequency_mhz, tx_power_dbm,
             spreading_factor, bandwidth_khz, coding_rate, modem_preset,
             antenna_id, cable_id, cable_length_m, pa_module_id, 1 if is_solar else 0,
             desired_coverage_radius_m, notes, environment, coverage_environment,
-            sort_order, now, now
+            visibility, coordinate_precision, node_role, node_status,
+            site_id, mount_id, radio_profile_id, sort_order, now, now
         ))
 
         self.conn.commit()
@@ -124,7 +133,8 @@ class NodeRepository:
                    spreading_factor, bandwidth_khz, coding_rate, modem_preset,
                    antenna_id, cable_id, cable_length_m, pa_module_id, is_solar,
                    desired_coverage_radius_m, notes, environment, coverage_environment,
-                   sort_order, created_at, updated_at
+                   visibility, coordinate_precision, node_role, node_status,
+                   site_id, mount_id, radio_profile_id, sort_order, created_at, updated_at
             FROM nodes
             WHERE id = ? AND plan_id = ?
         """, (node_id, plan_id))
@@ -165,7 +175,8 @@ class NodeRepository:
             "spreading_factor", "bandwidth_khz", "coding_rate", "modem_preset",
             "antenna_id", "cable_id", "cable_length_m", "pa_module_id", "is_solar",
             "desired_coverage_radius_m", "notes", "environment", "coverage_environment",
-            "sort_order"
+            "visibility", "coordinate_precision", "node_role", "node_status",
+            "site_id", "mount_id", "radio_profile_id", "sort_order"
         ]
 
         for field, value in kwargs.items():
@@ -256,7 +267,8 @@ class NodeRepository:
                    spreading_factor, bandwidth_khz, coding_rate, modem_preset,
                    antenna_id, cable_id, cable_length_m, pa_module_id, is_solar,
                    desired_coverage_radius_m, notes, environment, coverage_environment,
-                   sort_order, created_at, updated_at
+                   visibility, coordinate_precision, node_role, node_status,
+                   site_id, mount_id, radio_profile_id, sort_order, created_at, updated_at
             FROM nodes
             WHERE plan_id = ?
             {order_clause}

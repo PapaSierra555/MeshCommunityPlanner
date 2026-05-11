@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import type { MapViewport, LayerVisibility, MapMode } from '../types';
+import type { FieldObservation, MapViewport, LayerVisibility, MapMode } from '../types';
 
 // ============================================================================
 // Analysis Overlay Types
@@ -161,6 +161,10 @@ export interface MapState {
     latitude: number;
     longitude: number;
   } | null;
+  field_observation_draft: {
+    latitude: number;
+    longitude: number;
+  } | null;
 
   // Analysis overlays
   los_overlays: LOSOverlay[];
@@ -179,6 +183,9 @@ export interface MapState {
 
   // Signal overlays (post-deployment validation)
   signal_overlays: SignalOverlay[];
+
+  // Field observations (saved pass/fail map markers)
+  field_observations: FieldObservation[];
 
   // Elevation heatmap layer
   elevation_layer_enabled: boolean;
@@ -218,6 +225,7 @@ export interface MapState {
   toggleLayer: (layer: keyof LayerVisibility) => void;
   setLayerVisibility: (visibility: Partial<LayerVisibility>) => void;
   setTempNode: (coords: { latitude: number; longitude: number } | null) => void;
+  setFieldObservationDraft: (coords: { latitude: number; longitude: number } | null) => void;
   setLOSOverlays: (overlays: LOSOverlay[]) => void;
   clearLOSOverlays: () => void;
   setCoverageOverlays: (overlays: CoverageOverlay[]) => void;
@@ -238,6 +246,8 @@ export interface MapState {
   clearPlacementSearchBounds: () => void;
   setSignalOverlays: (overlays: SignalOverlay[]) => void;
   clearSignalOverlays: () => void;
+  setFieldObservations: (observations: FieldObservation[]) => void;
+  clearFieldObservations: () => void;
   setCoverageOpacity: (opacity: number) => void;
   setCoverageHatchMode: (enabled: boolean) => void;
   setSatelliteMode: (enabled: boolean) => void;
@@ -303,6 +313,7 @@ const initialState = {
     node_labels: true,
   },
   temp_node: null,
+  field_observation_draft: null,
   los_overlays: [] as LOSOverlay[],
   coverage_overlays: [] as CoverageOverlay[],
   terrain_coverage_overlays: [] as TerrainCoverageOverlay[],
@@ -310,6 +321,7 @@ const initialState = {
   route_path_overlays: [] as RoutePathOverlay[],
   flooding_overlay: null as FloodingOverlay | null,
   signal_overlays: [] as SignalOverlay[],
+  field_observations: [] as FieldObservation[],
   placement_suggestions: [] as PlacementSuggestion[],
   placement_coverage_radius_m: 1000,
   placement_search_bounds: null as { min_lat: number; min_lon: number; max_lat: number; max_lon: number } | null,
@@ -389,6 +401,7 @@ export const useMapStore = create<MapState>((set) => ({
     })),
 
   setTempNode: (coords) => set({ temp_node: coords }),
+  setFieldObservationDraft: (coords) => set({ field_observation_draft: coords }),
 
   setLOSOverlays: (overlays) => set({ los_overlays: overlays }),
   clearLOSOverlays: () => set({ los_overlays: [] }),
@@ -421,6 +434,8 @@ export const useMapStore = create<MapState>((set) => ({
   clearPlacementSearchBounds: () => set({ placement_search_bounds: null }),
   setSignalOverlays: (overlays) => set({ signal_overlays: overlays }),
   clearSignalOverlays: () => set({ signal_overlays: [] }),
+  setFieldObservations: (observations) => set({ field_observations: observations }),
+  clearFieldObservations: () => set({ field_observations: [] }),
   setCoverageOpacity: (opacity) => set({ coverageOpacity: opacity }),
   setCoverageHatchMode: (enabled) => set({ coverageHatchMode: enabled }),
   setSatelliteMode: (enabled) => set({ satelliteMode: enabled }),

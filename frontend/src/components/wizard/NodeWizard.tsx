@@ -13,6 +13,14 @@ import { AdvancedStep } from './steps/AdvancedStep';
 import { TemplateStep } from './steps/TemplateStep';
 import { ReviewStep } from './steps/ReviewStep';
 import type { Node } from '../../types';
+import {
+  buildNodeWizardCreatePayload,
+  createNodeWizardDraft,
+  flattenNodeWizardDraft,
+  updateNodeWizardDraftField,
+  type LegacyNodeCreatePayload,
+  type NodeWizardDraftField,
+} from '../../utils/nodeDomainAdapters';
 
 export interface NodeWizardProps {
   onComplete: (node: Partial<Node>) => void;
@@ -41,11 +49,12 @@ export function NodeWizard({
   initialData = {},
 }: NodeWizardProps) {
   const [currentStep, setCurrentStep] = useState(0);
-  const [formData, setFormData] = useState<Partial<Node>>(initialData);
+  const [formDraft, setFormDraft] = useState(() => createNodeWizardDraft(initialData));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
 
   const CurrentStepComponent = WIZARD_STEPS[currentStep].component;
+  const formData = flattenNodeWizardDraft(formDraft);
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === WIZARD_STEPS.length - 1;
   const progress = ((currentStep + 1) / WIZARD_STEPS.length) * 100;
@@ -81,12 +90,15 @@ export function NodeWizard({
 
   const handleFinish = () => {
     if (validateCurrentStep()) {
-      onComplete(formData);
+      onComplete(buildNodeWizardCreatePayload(formDraft));
     }
   };
 
-  const handleFieldChange = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+  const handleFieldChange = (
+    field: NodeWizardDraftField,
+    value: LegacyNodeCreatePayload[NodeWizardDraftField]
+  ) => {
+    setFormDraft((prev) => updateNodeWizardDraftField(prev, field, value));
     // Clear error for this field
     if (errors[field]) {
       setErrors((prev) => {
@@ -102,19 +114,24 @@ export function NodeWizard({
 
     // Load template data (mock for now)
     if (templateId === 'meshtastic-default') {
-      setFormData({
+      setFormDraft(createNodeWizardDraft({
         ...formData,
         latitude: 40.7128,
         longitude: -74.0060,
         device_id: 'meshtastic-default',
-        region_code: 'us_fcc',
-        firmware_family: 'meshtastic',
+        region: 'us_fcc',
+        firmware: 'meshtastic',
+        frequency_mhz: 906.875,
         tx_power_dbm: 20,
-        rx_sensitivity_dbm: -120,
-        antenna_gain_dbi: 2,
+        spreading_factor: 11,
+        bandwidth_khz: 250,
+        coding_rate: '4/5',
+        modem_preset: null,
+        antenna_id: '915-3dbi-omni',
         antenna_height_m: 2,
-        cable_loss_db: 0,
-      });
+        cable_id: null,
+        cable_length_m: 0,
+      }));
     }
   };
 

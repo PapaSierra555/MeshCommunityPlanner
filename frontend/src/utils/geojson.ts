@@ -33,6 +33,10 @@ interface GeoJSONFeature {
 interface GeoJSONFeatureCollection {
   type: 'FeatureCollection';
   name: string;
+  metadata: {
+    privacy_notice: string;
+    node_privacy_fields: string[];
+  };
   features: GeoJSONFeature[];
 }
 
@@ -47,6 +51,10 @@ export function exportGeoJSON(nodes: Node[], planName: string, links?: GeoJSONLi
       properties: {
         name: node.name,
         type: 'node',
+        visibility: node.visibility || 'private',
+        coordinate_precision: node.coordinate_precision || 'exact',
+        node_role: node.node_role || 'planned',
+        node_status: node.node_status || 'planned',
         device_id: node.device_id,
         firmware: node.firmware,
         antenna_height_m: node.antenna_height_m,
@@ -87,6 +95,10 @@ export function exportGeoJSON(nodes: Node[], planName: string, links?: GeoJSONLi
   const collection: GeoJSONFeatureCollection = {
     type: 'FeatureCollection',
     name: planName,
+    metadata: {
+      privacy_notice: 'Node privacy metadata is labeled per feature; coordinates are exported as stored.',
+      node_privacy_fields: ['visibility', 'coordinate_precision', 'node_role', 'node_status'],
+    },
     features,
   };
 

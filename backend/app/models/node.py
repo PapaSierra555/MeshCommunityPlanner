@@ -20,7 +20,7 @@ to reject SQL injection and SSRF attack patterns.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 # Import W1's centralized security functions (defense-in-depth)
@@ -50,6 +50,14 @@ def contains_ssrf_pattern(value: str) -> bool:
         if pattern.search(value):
             return True
     return False
+
+
+NodeVisibility = Literal["private", "community", "public"]
+CoordinatePrecision = Literal["exact", "approximate", "hidden"]
+NodeRole = Literal[
+    "client", "repeater", "gateway", "sensor", "planned", "experimental"
+]
+NodeStatus = Literal["candidate", "planned", "active", "retired", "rejected"]
 
 
 class NodeCreate(BaseModel):
@@ -104,6 +112,34 @@ class NodeCreate(BaseModel):
         pattern="^(los_elevated|open_rural|suburban|urban|indoor)$",
         description="Per-node propagation environment override (null = inherit global)"
     )
+    visibility: NodeVisibility = Field(
+        default="private",
+        description="Node visibility scope"
+    )
+    coordinate_precision: CoordinatePrecision = Field(
+        default="exact",
+        description="Coordinate disclosure precision"
+    )
+    node_role: NodeRole = Field(
+        default="planned",
+        description="Planned or deployed node role"
+    )
+    node_status: NodeStatus = Field(
+        default="planned",
+        description="Planning lifecycle status"
+    )
+    site_id: Optional[str] = Field(
+        None,
+        description="Optional physical site relationship"
+    )
+    mount_id: Optional[str] = Field(
+        None,
+        description="Optional mount relationship"
+    )
+    radio_profile_id: Optional[str] = Field(
+        None,
+        description="Optional reusable radio profile relationship"
+    )
 
     @field_validator('name', 'notes')
     @classmethod
@@ -130,7 +166,8 @@ class NodeCreate(BaseModel):
 
     @field_validator(
         'device_id', 'firmware', 'region', 'coding_rate',
-        'modem_preset', 'antenna_id', 'cable_id', 'pa_module_id'
+        'modem_preset', 'antenna_id', 'cable_id', 'pa_module_id',
+        'site_id', 'mount_id', 'radio_profile_id'
     )
     @classmethod
     def validate_id_fields(cls, v: Optional[str]) -> Optional[str]:
@@ -212,6 +249,13 @@ class NodeUpdate(BaseModel):
         pattern="^(los_elevated|open_rural|suburban|urban|indoor)$",
         description="Per-node propagation environment override (null = inherit global)"
     )
+    visibility: Optional[NodeVisibility] = None
+    coordinate_precision: Optional[CoordinatePrecision] = None
+    node_role: Optional[NodeRole] = None
+    node_status: Optional[NodeStatus] = None
+    site_id: Optional[str] = None
+    mount_id: Optional[str] = None
+    radio_profile_id: Optional[str] = None
     sort_order: Optional[int] = Field(None, ge=0)
 
     @field_validator('name', 'notes')
@@ -237,7 +281,8 @@ class NodeUpdate(BaseModel):
 
     @field_validator(
         'device_id', 'firmware', 'region', 'coding_rate',
-        'modem_preset', 'antenna_id', 'cable_id', 'pa_module_id'
+        'modem_preset', 'antenna_id', 'cable_id', 'pa_module_id',
+        'site_id', 'mount_id', 'radio_profile_id'
     )
     @classmethod
     def validate_id_fields(cls, v: Optional[str]) -> Optional[str]:
@@ -299,6 +344,13 @@ class NodeResponse(BaseModel):
     notes: str
     environment: str
     coverage_environment: Optional[str]
+    visibility: NodeVisibility
+    coordinate_precision: CoordinatePrecision
+    node_role: NodeRole
+    node_status: NodeStatus
+    site_id: Optional[str]
+    mount_id: Optional[str]
+    radio_profile_id: Optional[str]
     sort_order: int
     created_at: datetime
     updated_at: datetime
@@ -337,5 +389,3 @@ class NodeResponse(BaseModel):
             ]
         }
     }
-
-

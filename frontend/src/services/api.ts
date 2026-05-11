@@ -4,7 +4,19 @@
  * Reads auth token from window.__MESH_PLANNER_AUTH__
  */
 
-import type { Plan, Node } from '../types';
+import type {
+  Mount,
+  MountPage,
+  Node,
+  NodePage,
+  Plan,
+  RadioProfile,
+  RadioProfilePage,
+  Site,
+  SitePage,
+  FieldObservation,
+  FieldObservationPage,
+} from '../types';
 
 // ============================================================================
 // Configuration
@@ -193,8 +205,8 @@ export class APIClient {
   // Node Endpoints
   // ============================================================================
 
-  async listNodes(planId: string): Promise<Node[]> {
-    return this.get<Node[]>(`/plans/${planId}/nodes`);
+  async listNodes(planId: string): Promise<NodePage> {
+    return this.get<NodePage>(`/plans/${planId}/nodes`);
   }
 
   async createNode(planId: string, node: Partial<Node>): Promise<Node> {
@@ -211,6 +223,120 @@ export class APIClient {
 
   async deleteNode(planId: string, nodeId: string): Promise<void> {
     return this.delete<void>(`/plans/${planId}/nodes/${nodeId}`);
+  }
+
+  // ============================================================================
+  // Site Endpoints
+  // ============================================================================
+
+  async listSites(planId: string): Promise<SitePage> {
+    return this.get<SitePage>(`/plans/${planId}/sites`);
+  }
+
+  async getSite(planId: string, siteId: string): Promise<Site> {
+    return this.get<Site>(`/plans/${planId}/sites/${siteId}`);
+  }
+
+  async createSite(planId: string, site: Partial<Site>): Promise<Site> {
+    return this.post<Site>(`/plans/${planId}/sites`, site);
+  }
+
+  async updateSite(
+    planId: string,
+    siteId: string,
+    updates: Partial<Site>
+  ): Promise<Site> {
+    return this.put<Site>(`/plans/${planId}/sites/${siteId}`, updates);
+  }
+
+  async deleteSite(planId: string, siteId: string): Promise<void> {
+    return this.delete<void>(`/plans/${planId}/sites/${siteId}`);
+  }
+
+  // ============================================================================
+  // Mount Endpoints
+  // ============================================================================
+
+  async listMounts(planId: string): Promise<MountPage> {
+    return this.get<MountPage>(`/plans/${planId}/mounts`);
+  }
+
+  async getMount(planId: string, mountId: string): Promise<Mount> {
+    return this.get<Mount>(`/plans/${planId}/mounts/${mountId}`);
+  }
+
+  async createMount(planId: string, mount: Partial<Mount>): Promise<Mount> {
+    return this.post<Mount>(`/plans/${planId}/mounts`, mount);
+  }
+
+  async updateMount(
+    planId: string,
+    mountId: string,
+    updates: Partial<Mount>
+  ): Promise<Mount> {
+    return this.put<Mount>(`/plans/${planId}/mounts/${mountId}`, updates);
+  }
+
+  async deleteMount(planId: string, mountId: string): Promise<void> {
+    return this.delete<void>(`/plans/${planId}/mounts/${mountId}`);
+  }
+
+  // ============================================================================
+  // Radio Profile Endpoints
+  // ============================================================================
+
+  async listRadioProfiles(planId: string): Promise<RadioProfilePage> {
+    return this.get<RadioProfilePage>(`/plans/${planId}/radio-profiles`);
+  }
+
+  async getRadioProfile(planId: string, profileId: string): Promise<RadioProfile> {
+    return this.get<RadioProfile>(`/plans/${planId}/radio-profiles/${profileId}`);
+  }
+
+  async createRadioProfile(
+    planId: string,
+    radioProfile: Partial<RadioProfile>
+  ): Promise<RadioProfile> {
+    return this.post<RadioProfile>(`/plans/${planId}/radio-profiles`, radioProfile);
+  }
+
+  async updateRadioProfile(
+    planId: string,
+    profileId: string,
+    updates: Partial<RadioProfile>
+  ): Promise<RadioProfile> {
+    return this.put<RadioProfile>(`/plans/${planId}/radio-profiles/${profileId}`, updates);
+  }
+
+  async deleteRadioProfile(planId: string, profileId: string): Promise<void> {
+    return this.delete<void>(`/plans/${planId}/radio-profiles/${profileId}`);
+  }
+
+  // ============================================================================
+  // Field Observation Endpoints
+  // ============================================================================
+
+  async listFieldObservations(planId: string): Promise<FieldObservationPage> {
+    return this.get<FieldObservationPage>(`/plans/${planId}/field-observations?limit=1000`);
+  }
+
+  async createFieldObservation(
+    planId: string,
+    observation: Partial<FieldObservation>
+  ): Promise<FieldObservation> {
+    return this.post<FieldObservation>(`/plans/${planId}/field-observations`, observation);
+  }
+
+  async updateFieldObservation(
+    planId: string,
+    observationId: string,
+    updates: Partial<FieldObservation>
+  ): Promise<FieldObservation> {
+    return this.put<FieldObservation>(`/plans/${planId}/field-observations/${observationId}`, updates);
+  }
+
+  async deleteFieldObservation(planId: string, observationId: string): Promise<void> {
+    return this.delete<void>(`/plans/${planId}/field-observations/${observationId}`);
   }
 
   // ============================================================================
@@ -319,10 +445,13 @@ export class APIClient {
     maxRadiusM: number = 15000.0,
     paMaxOutputDbm?: number,
     paInputRangeMaxDbm?: number,
+    calibrationObservations: FieldObservation[] = [],
+    useFieldCalibration = false,
   ): Promise<any> {
     // 120s timeout — first-time SRTM tile download can be slow
     const body: Record<string, unknown> = {
       node_id: String(node.id),
+      node_name: node.name,
       latitude: node.latitude,
       longitude: node.longitude,
       antenna_height_m: node.antenna_height_m,
@@ -330,11 +459,21 @@ export class APIClient {
       tx_power_dbm: node.tx_power_dbm,
       antenna_gain_dbi: 3.0,
       cable_loss_db: 0.0,
-      receiver_sensitivity_dbm: -130.0,
+      spreading_factor: node.spreading_factor,
+      bandwidth_khz: node.bandwidth_khz,
+      coding_rate: node.coding_rate,
       environment,
       max_radius_m: maxRadiusM,
       num_radials: 360,
       sample_interval_m: 30.0,
+      use_field_calibration: useFieldCalibration,
+      calibration_observations: calibrationObservations.map((obs) => ({
+        latitude: obs.latitude,
+        longitude: obs.longitude,
+        success: obs.success,
+        ack_relay: obs.ack_relay,
+        ack_db: obs.ack_db,
+      })),
     };
     if (paMaxOutputDbm !== undefined && paInputRangeMaxDbm !== undefined) {
       body.pa_max_output_power_dbm = paMaxOutputDbm;
@@ -528,4 +667,3 @@ export function getAPIClient(): APIClient {
   }
   return apiClientInstance;
 }
-

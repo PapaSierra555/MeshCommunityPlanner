@@ -10,6 +10,9 @@ import { calculateMaxDistance } from '../../utils/fspl';
 import { formatDistance } from '../../utils/units';
 import { getStatusColor } from '../../utils/colors';
 
+const DEFAULT_ANTENNA_GAIN_DBI = 3.0;
+const DEFAULT_RECEIVER_SENSITIVITY_DBM = -130.0;
+
 export interface CoverageCircleProps {
   node: Node;
   color?: string;
@@ -25,19 +28,23 @@ const CoverageCircleComponent = ({
 
   // Calculate coverage radius using FSPL
   const radiusMeters = useMemo(() => {
+    if (node.desired_coverage_radius_m != null) {
+      return node.desired_coverage_radius_m;
+    }
+
     return calculateMaxDistance(
-      node.tx_power_dbm - (node.cable_loss_db || 0),
-      node.rx_sensitivity_dbm,
-      node.antenna_gain_dbi,
-      node.antenna_gain_dbi, // Assume same antenna on both ends
-      node.region_code
+      node.tx_power_dbm,
+      DEFAULT_RECEIVER_SENSITIVITY_DBM,
+      DEFAULT_ANTENNA_GAIN_DBI,
+      DEFAULT_ANTENNA_GAIN_DBI,
+      node.region,
+      node.frequency_mhz
     );
   }, [
+    node.desired_coverage_radius_m,
     node.tx_power_dbm,
-    node.cable_loss_db,
-    node.rx_sensitivity_dbm,
-    node.antenna_gain_dbi,
-    node.region_code,
+    node.region,
+    node.frequency_mhz,
   ]);
 
   // Determine color based on node status if not provided
@@ -46,14 +53,16 @@ const CoverageCircleComponent = ({
 
     // Map node status to color status
     const statusMapping: Record<string, 'online' | 'offline' | 'degraded' | 'unknown'> = {
-      'configured': 'online',
-      'draft': 'unknown',
-      'error': 'offline',
+      'active': 'online',
+      'candidate': 'unknown',
+      'planned': 'unknown',
+      'retired': 'offline',
+      'rejected': 'offline',
     };
 
-    const colorStatus = statusMapping[node.status] || 'unknown';
+    const colorStatus = statusMapping[node.node_status || 'planned'] || 'unknown';
     return getStatusColor(colorStatus);
-  }, [node.status, color]);
+  }, [node.node_status, color]);
 
   return (
     <Circle
@@ -83,12 +92,11 @@ export const CoverageCircle = React.memo(CoverageCircleComponent, (prevProps, ne
     prevProps.node.id === nextProps.node.id &&
     prevProps.node.latitude === nextProps.node.latitude &&
     prevProps.node.longitude === nextProps.node.longitude &&
+    prevProps.node.desired_coverage_radius_m === nextProps.node.desired_coverage_radius_m &&
     prevProps.node.tx_power_dbm === nextProps.node.tx_power_dbm &&
-    prevProps.node.cable_loss_db === nextProps.node.cable_loss_db &&
-    prevProps.node.rx_sensitivity_dbm === nextProps.node.rx_sensitivity_dbm &&
-    prevProps.node.antenna_gain_dbi === nextProps.node.antenna_gain_dbi &&
-    prevProps.node.region_code === nextProps.node.region_code &&
-    prevProps.node.status === nextProps.node.status &&
+    prevProps.node.region === nextProps.node.region &&
+    prevProps.node.frequency_mhz === nextProps.node.frequency_mhz &&
+    prevProps.node.node_status === nextProps.node.node_status &&
     prevProps.color === nextProps.color &&
     prevProps.fillOpacity === nextProps.fillOpacity
   );

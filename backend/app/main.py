@@ -24,7 +24,7 @@ import logging.handlers
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -72,24 +72,25 @@ async def lifespan(app: FastAPI):
     global _db_manager  # noqa: PLW0603
 
     # --- Startup ---
-    # Open database, run migrations, seed catalog data
-    if not is_test_mode():
-        db_path = get_db_path()
-        _db_manager = DatabaseManager(db_path)
-        _db_manager.open()
-        conn = _db_manager.connection
+    # Open database, run migrations, seed catalog data.
+    # Note: test-token auth is useful for local dev, but this app still needs
+    # the database initialized in that mode for plans/catalog/settings to work.
+    db_path = get_db_path()
+    _db_manager = DatabaseManager(db_path)
+    _db_manager.open()
+    conn = _db_manager.connection
 
-        run_migrations(conn)
-        load_seed_data(conn)
-        load_settings_defaults(conn)
-        load_sample_plans(conn)
-        init_db_manager(_db_manager)
+    run_migrations(conn)
+    load_seed_data(conn)
+    load_settings_defaults(conn)
+    load_sample_plans(conn)
+    init_db_manager(_db_manager)
 
-        # Register DB close as a shutdown callback so it runs even on
-        # Ctrl+C / console close (via lifecycle signal handlers)
-        _shutdown_mgr.on_shutdown(_db_manager.close)
+    # Register DB close as a shutdown callback so it runs even on
+    # Ctrl+C / console close (via lifecycle signal handlers)
+    _shutdown_mgr.on_shutdown(_db_manager.close)
 
-        logger.info("Database initialized at %s", db_path)
+    logger.info("Database initialized at %s", db_path)
 
     yield
 
@@ -106,16 +107,24 @@ def _register_w2_routers(app: FastAPI) -> None:
     from backend.app.api.health import router as health_router
     from backend.app.api.plans import router as plans_router
     from backend.app.api.nodes import router as nodes_router
+    from backend.app.api.sites import router as sites_router
+    from backend.app.api.mounts import router as mounts_router
+    from backend.app.api.radio_profiles import router as radio_profiles_router
     from backend.app.api.catalog import router as catalog_router
     from backend.app.api.internet_map import router as internet_map_router
     from backend.app.api.signal_import import router as signal_import_router
+    from backend.app.api.field_observations import router as field_observations_router
 
     app.include_router(health_router, prefix="/api")
     app.include_router(plans_router, prefix="/api")
     app.include_router(nodes_router, prefix="/api")
+    app.include_router(sites_router, prefix="/api")
+    app.include_router(mounts_router, prefix="/api")
+    app.include_router(radio_profiles_router, prefix="/api")
     app.include_router(catalog_router, prefix="/api")
     app.include_router(internet_map_router, prefix="/api")
     app.include_router(signal_import_router, prefix="/api")
+    app.include_router(field_observations_router, prefix="/api")
 
     # Mount static files (icons for KML overlays, etc.)
     _static_dir = _os.path.join(_os.path.dirname(__file__), "static")
@@ -247,9 +256,18 @@ def create_app(port: int | None = None) -> FastAPI:
         from fastapi.responses import JSONResponse as _JSONResp
 
         @app.post("/api/shutdown", include_in_schema=False)
-        async def shutdown():
-            """Graceful shutdown — called by frontend on beforeunload."""
+        async def shutdown(request: Request):
+            """Graceful shutdown — called by frontend on beforeunload.
+
+            Only local browser sessions may stop the desktop server. When the
+            app is bound to 0.0.0.0 for Tailscale/LAN access, remote tabs must
+            not be able to terminate the process on refresh or close.
+            """
             import os, signal, threading
+
+            client_host = request.client.host if request.client else ""
+            if client_host not in {"127.0.0.1", "::1", "localhost"}:
+                return _JSONResp(content={"status": "ignored", "reason": "remote_client"})
 
             def _deferred_exit():
                 import time

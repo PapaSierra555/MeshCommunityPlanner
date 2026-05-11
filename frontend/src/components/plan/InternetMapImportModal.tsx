@@ -12,6 +12,8 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getAPIClient } from '../../services/api';
 import { usePlanStore } from '../../stores/planStore';
+import { buildLegacyNodeCreatePayload } from '../../utils/nodeDomainAdapters';
+import type { Node } from '../../types';
 import meshcoreIcon from '../../assets/icons/meshcore.svg';
 import reticulumIcon from '../../assets/icons/reticulum.svg';
 import meshtasticIcon from '../../assets/icons/meshtastic.svg';
@@ -207,10 +209,13 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
     const refNode = existingNodes[0];
 
     // Build radio defaults from current plan's first node or plan defaults
-    const defaults = {
+    const defaultFirmware = refNode?.firmware
+      || currentPlan.firmware_family
+      || (selectedSource === 'reticulum' ? 'reticulum' : 'meshcore');
+    const defaults: Partial<Node> = {
       antenna_height_m: 3.0,
       device_id: refNode?.device_id || 'tbeam-supreme',
-      firmware: refNode?.firmware || currentPlan.firmware_family || selectedSource === 'reticulum' ? 'reticulum' : 'meshcore',
+      firmware: defaultFirmware,
       region: refNode?.region || currentPlan.region || 'us_fcc',
       frequency_mhz: refNode?.frequency_mhz ?? 906.875,
       tx_power_dbm: refNode?.tx_power_dbm ?? 20,
@@ -233,13 +238,12 @@ export function InternetMapImportModal({ isOpen, onClose, planId }: InternetMapI
     let failures = 0;
     for (const mapNode of toImport) {
       try {
-        const node = await api.createNode(planId, {
+        const node = await api.createNode(planId, buildLegacyNodeCreatePayload(defaults, {
           name: mapNode.name,
           latitude: mapNode.lat,
           longitude: mapNode.lon,
           notes: mapNode.description || '',
-          ...defaults,
-        });
+        }));
         created.push(node);
       } catch (err) {
         failures++;

@@ -4,12 +4,12 @@
  */
 
 import React, { useState } from 'react';
-import type { Node } from '../../../types';
+import type { LegacyNodeCreatePayload, NodeWizardDraftField } from '../../../utils/nodeDomainAdapters';
 
 export interface TemplateStepProps {
-  data: Partial<Node>;
+  data: LegacyNodeCreatePayload;
   errors: Record<string, string>;
-  onChange: (field: string, value: any) => void;
+  onChange: (field: NodeWizardDraftField, value: LegacyNodeCreatePayload[NodeWizardDraftField]) => void;
 }
 
 export function TemplateStep({ data, errors, onChange }: TemplateStepProps) {

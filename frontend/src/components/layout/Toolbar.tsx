@@ -31,6 +31,7 @@ interface ToolbarProps {
   onImportFromMap?: () => void;
   isInternetOnline?: boolean | null;
   onImportSignal?: () => void;
+  onFieldObservations?: () => void;
   onExportKML?: () => void;
   onExportGeoJSON?: () => void;
   onDuplicatePlan?: () => void;
@@ -97,6 +98,7 @@ export function Toolbar({
   onImportFromMap,
   isInternetOnline = null,
   onImportSignal,
+  onFieldObservations,
   onExportKML,
   onExportGeoJSON,
   onDuplicatePlan,
@@ -388,6 +390,11 @@ export function Toolbar({
                     onClick={() => hasPlan && handleItemClick(onImportSignal)}
                     title="Import RSSI/SNR signal observations from a CSV export — compare predicted link budgets against real-world measurements">
                     Import Signal Data (CSV)
+                  </button>
+                  <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
+                    onClick={() => hasPlan && handleItemClick(onFieldObservations)}
+                    title="Save field test pass/fail markers with ACK relay and ACK dB readings">
+                    Field Test Observations
                   </button>
                   <button className={`toolbar-dropdown-item${!hasPlan ? ' disabled' : ''}`} type="button"
                     onClick={() => hasPlan && handleItemClick(onExportCSV)}

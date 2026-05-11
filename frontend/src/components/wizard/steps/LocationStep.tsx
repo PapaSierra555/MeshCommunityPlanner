@@ -5,12 +5,12 @@
 
 import React from 'react';
 import { NumberInput } from '../../common/NumberInput';
-import type { Node } from '../../../types';
+import type { LegacyNodeCreatePayload, NodeWizardDraftField } from '../../../utils/nodeDomainAdapters';
 
 export interface LocationStepProps {
-  data: Partial<Node>;
+  data: LegacyNodeCreatePayload;
   errors: Record<string, string>;
-  onChange: (field: string, value: any) => void;
+  onChange: (field: NodeWizardDraftField, value: LegacyNodeCreatePayload[NodeWizardDraftField]) => void;
 }
 
 export function LocationStep({ data, errors, onChange }: LocationStepProps) {

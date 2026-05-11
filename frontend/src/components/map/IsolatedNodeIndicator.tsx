@@ -53,8 +53,8 @@ const IsolatedNodeIndicatorComponent = ({
       }}
       className={className}
     >
-      <Tooltip role="alert" permanent={false}>
-        <div className="isolated-node-tooltip">
+      <Tooltip permanent={false}>
+        <div className="isolated-node-tooltip" role="alert">
           <strong>⚠ {node.name}</strong>
           <br />
           Isolated - No coverage overlap with other nodes

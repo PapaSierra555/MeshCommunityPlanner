@@ -146,6 +146,13 @@ async def create_node(
         notes=node.notes,
         environment=node.environment,
         coverage_environment=node.coverage_environment,
+        visibility=node.visibility,
+        coordinate_precision=node.coordinate_precision,
+        node_role=node.node_role,
+        node_status=node.node_status,
+        site_id=node.site_id,
+        mount_id=node.mount_id,
+        radio_profile_id=node.radio_profile_id,
         sort_order=0  # Default sort order
     )
 
@@ -255,7 +262,5 @@ async def delete_node(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Node not found"
         )
-
-
 
 

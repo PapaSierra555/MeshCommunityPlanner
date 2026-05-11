@@ -23,6 +23,7 @@ const NodeMarkerComponent = ({
 
   // Create accessible label for screen readers
   const accessibleLabel = `${node.name} at ${node.latitude.toFixed(2)}, ${node.longitude.toFixed(2)}`;
+  const nodeStatus = node.node_status || 'planned';
 
   const handleClick = () => {
     if (onClick) {
@@ -33,7 +34,7 @@ const NodeMarkerComponent = ({
   const handleDragEnd = (e: L.DragEndEvent) => {
     const { lat, lng } = e.target.getLatLng();
     if (onPositionChange) {
-      onPositionChange(node.id, lat, lng);
+      onPositionChange(String(node.id), lat, lng);
     }
   };
 
@@ -51,7 +52,7 @@ const NodeMarkerComponent = ({
       <Popup>
         <div className="node-popup">
           <h3>{node.name}</h3>
-          <div className="node-status">Status: {node.status}</div>
+          <div className="node-status">Status: {nodeStatus}</div>
           <div className="node-coords">
             <div>Lat: {node.latitude.toFixed(6)}</div>
             <div>Lng: {node.longitude.toFixed(6)}</div>
@@ -61,7 +62,7 @@ const NodeMarkerComponent = ({
           )}
           <div className="node-antenna">Height: {node.antenna_height_m}m</div>
           <div className="node-power">
-            TX: {node.tx_power_dbm} dBm | RX: {node.rx_sensitivity_dbm} dBm
+            TX: {node.tx_power_dbm} dBm | Frequency: {node.frequency_mhz} MHz
           </div>
         </div>
       </Popup>
@@ -78,10 +79,10 @@ export const NodeMarker = React.memo(NodeMarkerComponent, (prevProps, nextProps)
     prevProps.node.name === nextProps.node.name &&
     prevProps.node.latitude === nextProps.node.latitude &&
     prevProps.node.longitude === nextProps.node.longitude &&
-    prevProps.node.status === nextProps.node.status &&
+    prevProps.node.node_status === nextProps.node.node_status &&
     prevProps.node.device_id === nextProps.node.device_id &&
     prevProps.node.antenna_height_m === nextProps.node.antenna_height_m &&
     prevProps.node.tx_power_dbm === nextProps.node.tx_power_dbm &&
-    prevProps.node.rx_sensitivity_dbm === nextProps.node.rx_sensitivity_dbm
+    prevProps.node.frequency_mhz === nextProps.node.frequency_mhz
   );
 });

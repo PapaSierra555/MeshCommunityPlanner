@@ -14,27 +14,9 @@ import { CoverageLegend } from './CoverageLegend';
 import { ElevationLegend } from './ElevationLegend';
 import { getAPIClient } from '../../services/api';
 import { ensureHatchPatterns, removeHatchPatterns, getPatternId, getNodeHatchColor, getPatternType, PatternType } from '../../utils/hatchPatterns';
-
-// Inline SVG marker icons - no external images needed
-function createNodeIcon(selected: boolean = false, multiSelected: boolean = false) {
-  let color = '#3498db'; // default blue
-  if (selected) {
-    color = '#e74c3c'; // red for primary selected
-  } else if (multiSelected) {
-    color = '#e67e22'; // orange for multi-selected
-  }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 28 40">
-    <path d="M14 0C6.3 0 0 6.3 0 14c0 10.5 14 26 14 26s14-15.5 14-26C28 6.3 21.7 0 14 0z" fill="${color}" stroke="#fff" stroke-width="2"/>
-    <circle cx="14" cy="14" r="6" fill="#fff"/>
-  </svg>`;
-  return L.divIcon({
-    html: svg,
-    className: 'custom-marker-icon',
-    iconSize: [28, 40],
-    iconAnchor: [14, 40],
-    popupAnchor: [0, -36],
-  });
-}
+import { escapeHtml } from '../../utils/html';
+import { observationRfSummary } from '../../utils/fieldObservationRf';
+import { NODE_LABEL_TOOLTIP_OPTIONS, buildNodePopupHtml, createNodeIcon } from './nodeMarkerLeaflet';
 
 // Stable default center - defined outside component to avoid re-creation
 const DEFAULT_CENTER: [number, number] = [39.8283, -98.5795];
@@ -128,6 +110,7 @@ export function MapContainer({ className = '' }: MapContainerProps) {
   const floodingLayerRef = useRef<L.LayerGroup | null>(null);
   const placementLayerRef = useRef<L.LayerGroup | null>(null);
   const signalLayerRef = useRef<L.LayerGroup | null>(null);
+  const fieldObservationLayerRef = useRef<L.LayerGroup | null>(null);
   const elevationTileLayerRef = useRef<L.TileLayer | null>(null);
   const baseTileLayerRef = useRef<L.TileLayer | null>(null);
   const elevationEnsureTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -149,6 +132,7 @@ export function MapContainer({ className = '' }: MapContainerProps) {
   const floodingOverlay = useMapStore((s) => s.flooding_overlay);
   const placementSuggestions = useMapStore((s) => s.placement_suggestions);
   const signalOverlays = useMapStore((s) => s.signal_overlays);
+  const fieldObservations = useMapStore((s) => s.field_observations);
   const placementCoverageRadiusM = useMapStore((s) => s.placement_coverage_radius_m);
   const placementSearchBounds = useMapStore((s) => s.placement_search_bounds);
   const coverageOpacity = useMapStore((s) => s.coverageOpacity);
@@ -167,6 +151,14 @@ export function MapContainer({ className = '' }: MapContainerProps) {
   const handleMapClick = useCallback(async (e: L.LeafletMouseEvent) => {
     const plan = usePlanStore.getState().current_plan;
     const mode = useMapStore.getState().mode;
+
+    if (mode === 'add_field_observation') {
+      useMapStore.getState().setFieldObservationDraft({
+        latitude: e.latlng.lat,
+        longitude: e.latlng.lng,
+      });
+      return;
+    }
 
     if (mode !== 'add_node' || !plan) return;
 
@@ -190,6 +182,10 @@ export function MapContainer({ className = '' }: MapContainerProps) {
         latitude: lat,
         longitude: lng,
         antenna_height_m: 3,
+        visibility: refNode?.visibility || 'private',
+        coordinate_precision: refNode?.coordinate_precision || 'exact',
+        node_role: 'planned',
+        node_status: 'planned',
         device_id: 'tbeam-supreme',
         firmware,
         region,
@@ -217,6 +213,10 @@ export function MapContainer({ className = '' }: MapContainerProps) {
         latitude: lat,
         longitude: lng,
         antenna_height_m: 3,
+        visibility: refNode?.visibility || 'private',
+        coordinate_precision: refNode?.coordinate_precision || 'exact',
+        node_role: 'planned',
+        node_status: 'planned',
         device_id: 'tbeam-supreme',
         firmware,
         region,
@@ -233,6 +233,8 @@ export function MapContainer({ className = '' }: MapContainerProps) {
         is_solar: false,
         desired_coverage_radius_m: null,
         notes: '',
+        environment: 'suburban',
+        coverage_environment: null,
         sort_order: nodeNum,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -344,6 +346,8 @@ export function MapContainer({ className = '' }: MapContainerProps) {
 
     const signalLayer = L.layerGroup().addTo(map);
     signalLayerRef.current = signalLayer;
+    const fieldObservationLayer = L.layerGroup().addTo(map);
+    fieldObservationLayerRef.current = fieldObservationLayer;
 
     map.on('click', handleMapClick);
 
@@ -399,21 +403,16 @@ export function MapContainer({ className = '' }: MapContainerProps) {
       const isPrimarySelected = selectedNodeId === nodeId;
       const isMultiSelected = selectedNodeIds.includes(nodeId);
       const existingMarker = markersRef.current.get(nodeId);
+      const nodeNameHtml = escapeHtml(node.name);
+      const nodePopupHtml = buildNodePopupHtml(node);
 
       if (existingMarker) {
         existingMarker.setLatLng([node.latitude, node.longitude]);
         existingMarker.setIcon(createNodeIcon(isPrimarySelected, isMultiSelected && !isPrimarySelected));
-        existingMarker.setPopupContent(
-          `<b>${node.name}</b><br>` +
-          `Lat: ${node.latitude.toFixed(5)}<br>` +
-          `Lon: ${node.longitude.toFixed(5)}<br>` +
-          `Height: ${node.antenna_height_m}m<br>` +
-          `Device: ${node.device_id}<br>` +
-          `Power: ${node.tx_power_dbm} dBm`
-        );
+        existingMarker.setPopupContent(nodePopupHtml);
         // Update permanent label — must unbind/rebind to change options
         existingMarker.unbindTooltip();
-        existingMarker.bindTooltip(node.name, { permanent: true, direction: 'top', offset: [0, -42], className: 'node-label-tooltip' });
+        existingMarker.bindTooltip(nodeNameHtml, NODE_LABEL_TOOLTIP_OPTIONS);
         const existingEl = existingMarker.getElement();
         if (existingEl) existingEl.setAttribute('aria-label', `Node: ${node.name}`);
         if (lockNodePositions) existingMarker.dragging?.disable();
@@ -423,15 +422,8 @@ export function MapContainer({ className = '' }: MapContainerProps) {
           icon: createNodeIcon(isPrimarySelected, isMultiSelected && !isPrimarySelected),
           draggable: !lockNodePositions,
         })
-          .bindPopup(
-            `<b>${node.name}</b><br>` +
-            `Lat: ${node.latitude.toFixed(5)}<br>` +
-            `Lon: ${node.longitude.toFixed(5)}<br>` +
-            `Height: ${node.antenna_height_m}m<br>` +
-            `Device: ${node.device_id}<br>` +
-            `Power: ${node.tx_power_dbm} dBm`
-          )
-          .bindTooltip(node.name, { permanent: true, direction: 'top', offset: [0, -42], className: 'node-label-tooltip' });
+          .bindPopup(nodePopupHtml)
+          .bindTooltip(nodeNameHtml, NODE_LABEL_TOOLTIP_OPTIONS);
 
         marker.on('click', (e) => {
           L.DomEvent.stopPropagation(e);
@@ -498,7 +490,7 @@ export function MapContainer({ className = '' }: MapContainerProps) {
       : '';
 
     return (
-      `<b>Link: ${los.nodeAName} <-> ${los.nodeBName}</b><br>` +
+      `<b>Link: ${escapeHtml(los.nodeAName)} <-> ${escapeHtml(los.nodeBName)}</b><br>` +
       `Quality: ${qualityLabel}<br>` +
       `Distance: ${(los.distanceM / 1000).toFixed(2)} km<br>` +
       terrainLines.join('<br>') + '<br>' +
@@ -595,8 +587,8 @@ export function MapContainer({ className = '' }: MapContainerProps) {
           const items = nearby.map(({ los: nLos }) => {
             const q = !nLos.isViable ? 'Not Viable' : !nLos.hasLos ? 'NLOS' : nLos.linkQuality === 'marginal' ? 'Marginal' : 'Good';
             const dist = (nLos.distanceM / 1000).toFixed(2);
-            return `<div class="los-disambig-item" data-los-id="${nLos.id}" style="cursor:pointer;padding:3px 6px;border-bottom:1px solid #555;">` +
-              `<b>${nLos.nodeAName} ↔ ${nLos.nodeBName}</b> — ${q}, ${dist} km</div>`;
+            return `<div class="los-disambig-item" data-los-id="${escapeHtml(nLos.id)}" style="cursor:pointer;padding:3px 6px;border-bottom:1px solid #555;">` +
+              `<b>${escapeHtml(nLos.nodeAName)} ↔ ${escapeHtml(nLos.nodeBName)}</b> — ${q}, ${dist} km</div>`;
           }).join('');
 
           const popup = L.popup({ className: 'los-disambig-popup', maxWidth: 320 })
@@ -646,9 +638,9 @@ export function MapContainer({ className = '' }: MapContainerProps) {
       });
 
       circle.bindPopup(
-        `<b>Coverage: ${cov.nodeName}</b><br>` +
+        `<b>Coverage: ${escapeHtml(cov.nodeName)}</b><br>` +
         `Radius: ${(cov.coverageRadiusM / 1000).toFixed(2)} km<br>` +
-        `Engine: ${cov.engine}`
+        `Engine: ${escapeHtml(cov.engine)}`
       );
 
       circle.bindTooltip(`${(cov.coverageRadiusM / 1000).toFixed(1)}km radius`);
@@ -715,8 +707,8 @@ export function MapContainer({ className = '' }: MapContainerProps) {
       });
 
       // Signal stats are precomputed — raw points not stored in state
-      let popupContent = `<b>Coverage: ${overlay.nodeName}</b><br>` +
-        `Environment: ${overlay.environment}<br>`;
+      let popupContent = `<b>Coverage: ${escapeHtml(overlay.nodeName)}</b><br>` +
+        `Environment: ${escapeHtml(overlay.environment)}<br>`;
       if (overlay.pointCount > 0) {
         popupContent +=
           `Signal range: ${overlay.signalMax.toFixed(0)} to ${overlay.signalMin.toFixed(0)} dBm<br>` +
@@ -724,7 +716,7 @@ export function MapContainer({ className = '' }: MapContainerProps) {
       }
       popupContent +=
         `Grid points: ${overlay.pointCount.toLocaleString()}<br>` +
-        `Elevation: ${overlay.elevationSource}<br>` +
+        `Elevation: ${escapeHtml(overlay.elevationSource)}<br>` +
         `Compute: ${overlay.computationTimeMs}ms`;
 
       imageOverlay.bindPopup(popupContent);
@@ -878,13 +870,13 @@ export function MapContainer({ className = '' }: MapContainerProps) {
         const terrainTag = vs.terrainAvailable ? 'SRTM terrain' : 'Flat terrain';
 
         line.bindPopup(
-          `<b>Viewshed: ${vs.observerName} → ${target.nodeName}</b><br>` +
+          `<b>Viewshed: ${escapeHtml(vs.observerName)} → ${escapeHtml(target.nodeName)}</b><br>` +
           `Status: <b>${statusLabel}</b><br>` +
           `Distance: ${distKm} km${obstructionHtml}<br>` +
           `Terrain: ${terrainTag}`
         );
 
-        line.bindTooltip(`${target.nodeName}: ${statusLabel} (${distKm}km)`);
+        line.bindTooltip(`${escapeHtml(target.nodeName)}: ${statusLabel} (${distKm}km)`);
         viewshedLayerRef.current!.addLayer(line);
       });
     });
@@ -918,11 +910,11 @@ export function MapContainer({ className = '' }: MapContainerProps) {
         const hopDetails = route.pathLinks.map((link) => {
           const nA = nodes.find((n) => String(n.id) === link.nodeAUuid);
           const nB = nodes.find((n) => String(n.id) === link.nodeBUuid);
-          return `${nA?.name || '?'} → ${nB?.name || '?'}: ${(link.distanceM / 1000).toFixed(2)} km (${link.linkQuality})`;
+          return `${escapeHtml(nA?.name || '?')} → ${escapeHtml(nB?.name || '?')}: ${(link.distanceM / 1000).toFixed(2)} km (${escapeHtml(link.linkQuality)})`;
         }).join('<br>');
 
         line.bindPopup(
-          `<b>Route: ${route.sourceName} → ${route.targetName}</b><br>` +
+          `<b>Route: ${escapeHtml(route.sourceName)} → ${escapeHtml(route.targetName)}</b><br>` +
           `Hops: ${route.hopCount}<br>` +
           `Total distance: ${(route.totalDistanceM / 1000).toFixed(2)} km<br>` +
           `<hr style="margin:4px 0">${hopDetails}`
@@ -930,7 +922,7 @@ export function MapContainer({ className = '' }: MapContainerProps) {
       } else {
         line.bindPopup(
           `<b>Alternative route #${route.rank}</b><br>` +
-          `${route.sourceName} → ${route.targetName}<br>` +
+          `${escapeHtml(route.sourceName)} → ${escapeHtml(route.targetName)}<br>` +
           `Hops: ${route.hopCount}, Distance: ${(route.totalDistanceM / 1000).toFixed(2)} km`
         );
       }
@@ -998,7 +990,7 @@ export function MapContainer({ className = '' }: MapContainerProps) {
           fillOpacity: isSource ? 0.9 : 0.6,
           weight: isSource ? 3 : 2,
         });
-        circle.bindTooltip(`${node.name} (Hop ${i}, ${wave.cumulativeTimeMs.toFixed(0)}ms)${isCritical ? ' [CRITICAL]' : ''}`);
+        circle.bindTooltip(`${escapeHtml(node.name)} (Hop ${i}, ${wave.cumulativeTimeMs.toFixed(0)}ms)${isCritical ? ' [CRITICAL]' : ''}`);
         floodingLayerRef.current!.addLayer(circle);
 
         // Red dashed ring around critical (articulation point) nodes
@@ -1171,7 +1163,7 @@ export function MapContainer({ className = '' }: MapContainerProps) {
         `<b>Suggested Location #${idx + 1}</b><br>` +
         `Score: <span style="color:${scoreColor}">${(sug.score * 100).toFixed(0)}%</span><br>` +
         `Coverage gain: ${sug.coverage_gain_km2.toFixed(2)} km&sup2;<br>` +
-        `${sug.reason}`
+        `${escapeHtml(sug.reason)}`
       );
       marker.bindTooltip(`Suggestion #${idx + 1} (${(sug.score * 100).toFixed(0)}%)`);
 
@@ -1215,7 +1207,7 @@ export function MapContainer({ className = '' }: MapContainerProps) {
 
         const snrPart = obs.snr_db !== null ? ` / ${obs.snr_db.toFixed(1)} dB SNR` : '';
         line.bindTooltip(
-          `${obs.nodeAName} \u2192 ${obs.nodeBName}: ${obs.rssi_dbm.toFixed(1)} dBm${snrPart}`,
+          `${escapeHtml(obs.nodeAName)} \u2192 ${escapeHtml(obs.nodeBName)}: ${obs.rssi_dbm.toFixed(1)} dBm${snrPart}`,
           { sticky: true }
         );
 
@@ -1224,12 +1216,51 @@ export function MapContainer({ className = '' }: MapContainerProps) {
     });
   }, [signalOverlays, nodes]);
 
+  // Draw saved field test observations — pass/fail communication markers
+  useEffect(() => {
+    if (!fieldObservationLayerRef.current) return;
+    fieldObservationLayerRef.current.clearLayers();
+
+    fieldObservations.forEach((obs) => {
+      const color = obs.success ? '#16a34a' : '#dc2626';
+      const glyph = obs.success ? '&#10003;' : '&#215;';
+      const label = obs.success ? 'Success' : 'Failed';
+      const icon = L.divIcon({
+        className: 'field-observation-marker',
+        html: `<div style="width:22px;height:22px;border-radius:50%;background:${color};color:#fff;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;">${glyph}</div>`,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+        popupAnchor: [0, -12],
+      });
+
+      const marker = L.marker([obs.latitude, obs.longitude], { icon, interactive: true });
+      const rf = observationRfSummary(obs, nodes);
+      const ackPart = obs.ack_db != null ? `${obs.ack_db.toFixed(1)} dB` : 'Not recorded';
+      const rssiPart = rf.estimatedRssi != null ? `${rf.estimatedRssi.toFixed(1)} dBm` : 'Not available';
+      const noisePart = rf.estimatedRssi != null ? ` (${rf.bandwidthKhz} kHz noise floor ${rf.noiseFloor.toFixed(1)} dBm)` : '';
+      const deltaPart = rf.txToRssiDelta != null ? `<br>Approx. observed path loss: ${rf.txToRssiDelta.toFixed(1)} dB` : '';
+      const relayPart = obs.ack_relay ? escapeHtml(obs.ack_relay) : 'None';
+      const timePart = obs.timestamp ? escapeHtml(obs.timestamp.replace('T', ' ').slice(0, 16)) : 'Not recorded';
+      const notesPart = obs.notes ? `<br>Notes: ${escapeHtml(obs.notes)}` : '';
+      marker.bindPopup(
+        `<b>Field test: ${label}</b><br>` +
+        `ACK Relay: ${relayPart}<br>` +
+        `ACK SNR: ${ackPart}<br>` +
+        `Est. RSSI: ${rssiPart}${noisePart}${deltaPart}<br>` +
+        `Type: ${escapeHtml(obs.test_type)}<br>` +
+        `Time: ${timePart}${notesPart}`
+      );
+      marker.bindTooltip(`${label}${obs.ack_relay ? ` via ${obs.ack_relay}` : ''}`, { sticky: true });
+      fieldObservationLayerRef.current!.addLayer(marker);
+    });
+  }, [fieldObservations, nodes]);
+
   // Change cursor based on mode
   useEffect(() => {
     if (!mapRef.current) return;
     const mode = useMapStore.getState().mode;
     const plan = usePlanStore.getState().current_plan;
-    if (mode === 'add_node' && plan) {
+    if ((mode === 'add_node' && plan) || mode === 'add_field_observation') {
       mapRef.current.style.cursor = 'crosshair';
     } else {
       mapRef.current.style.cursor = '';

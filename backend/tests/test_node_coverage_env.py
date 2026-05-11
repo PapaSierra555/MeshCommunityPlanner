@@ -62,6 +62,13 @@ CREATE TABLE IF NOT EXISTS nodes (
     notes                       TEXT NOT NULL DEFAULT '',
     environment                 TEXT NOT NULL DEFAULT 'suburban',
     coverage_environment        TEXT DEFAULT NULL,
+    visibility                  TEXT NOT NULL DEFAULT 'private',
+    coordinate_precision        TEXT NOT NULL DEFAULT 'exact',
+    node_role                   TEXT NOT NULL DEFAULT 'planned',
+    node_status                 TEXT NOT NULL DEFAULT 'planned',
+    site_id                     TEXT,
+    mount_id                    TEXT,
+    radio_profile_id            TEXT,
     sort_order                  INTEGER NOT NULL DEFAULT 0,
     created_at                  TEXT NOT NULL,
     updated_at                  TEXT NOT NULL
@@ -226,3 +233,73 @@ class TestCoverageEnvironmentListByPlan:
         by_name = {n["name"]: n for n in nodes}
         assert by_name["Node A"]["coverage_environment"] == "los_elevated"
         assert by_name["Node B"]["coverage_environment"] is None
+
+
+class TestNodePrivacyDomainFields:
+    def test_create_without_privacy_domain_fields_uses_defaults(self, conn, plan_id):
+        """Node created without privacy/domain fields returns backwards-compatible defaults."""
+        repo = NodeRepository(conn)
+        node_id = _make_node(repo, plan_id)
+
+        node = repo.get_by_id(plan_id, node_id)
+
+        assert node is not None
+        assert node["visibility"] == "private"
+        assert node["coordinate_precision"] == "exact"
+        assert node["node_role"] == "planned"
+        assert node["node_status"] == "planned"
+
+    def test_create_with_privacy_domain_fields_round_trips(self, conn, plan_id):
+        """Node privacy/domain fields are stored and returned on create."""
+        repo = NodeRepository(conn)
+        node_id = _make_node(
+            repo,
+            plan_id,
+            visibility="community",
+            coordinate_precision="approximate",
+            node_role="repeater",
+            node_status="active",
+        )
+
+        node = repo.get_by_id(plan_id, node_id)
+
+        assert node is not None
+        assert node["visibility"] == "community"
+        assert node["coordinate_precision"] == "approximate"
+        assert node["node_role"] == "repeater"
+        assert node["node_status"] == "active"
+
+    def test_update_privacy_domain_fields_persists(self, conn, plan_id):
+        """Partial updates can change privacy/domain fields."""
+        repo = NodeRepository(conn)
+        node_id = _make_node(repo, plan_id)
+
+        success = repo.update(
+            plan_id,
+            node_id,
+            visibility="public",
+            coordinate_precision="hidden",
+            node_role="gateway",
+            node_status="retired",
+        )
+        node = repo.get_by_id(plan_id, node_id)
+
+        assert success is True
+        assert node["visibility"] == "public"
+        assert node["coordinate_precision"] == "hidden"
+        assert node["node_role"] == "gateway"
+        assert node["node_status"] == "retired"
+
+    def test_list_returns_privacy_domain_fields(self, conn, plan_id):
+        """list_by_plan includes privacy/domain fields in returned dicts."""
+        repo = NodeRepository(conn)
+        _make_node(repo, plan_id, name="Node A", visibility="community", node_role="sensor")
+        _make_node(repo, plan_id, name="Node B", coordinate_precision="hidden", node_status="candidate")
+
+        nodes = repo.list_by_plan(plan_id)
+        by_name = {n["name"]: n for n in nodes}
+
+        assert by_name["Node A"]["visibility"] == "community"
+        assert by_name["Node A"]["node_role"] == "sensor"
+        assert by_name["Node B"]["coordinate_precision"] == "hidden"
+        assert by_name["Node B"]["node_status"] == "candidate"

@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import type { PathOptions } from 'leaflet';
 import { Polygon, Tooltip } from 'react-leaflet';
 
 export interface OverlapZone {
@@ -64,15 +65,17 @@ const OverlapZoneComponent = ({
     }
   };
 
+  const pathOptions: PathOptions & { fillPattern?: string } = {
+    color,
+    fillPattern,
+    fillOpacity: opacity,
+    weight: 1,
+  };
+
   return (
     <Polygon
       positions={zone.bounds}
-      pathOptions={{
-        color,
-        fillPattern,
-        fillOpacity: opacity,
-        weight: 1,
-      }}
+      pathOptions={pathOptions}
       eventHandlers={{
         click: handleClick,
       }}

@@ -254,6 +254,15 @@ class ElevationEnsureTilesRequest(BaseModel):
     max_lon: float = Field(..., ge=-180, le=180)
 
 
+class CoverageCalibrationObservation(BaseModel):
+    """Minimal field observation used to empirically calibrate one coverage run."""
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    success: bool = True
+    ack_relay: Optional[str] = None
+    ack_db: Optional[float] = None
+
+
 class TerrainCoverageGridRequest(BaseModel):
     """Terrain-aware coverage grid request (radial sweep with SRTM)."""
     node_id: str = "node"
@@ -265,6 +274,9 @@ class TerrainCoverageGridRequest(BaseModel):
     antenna_gain_dbi: float = 3.0
     cable_loss_db: float = Field(0.0, ge=0)
     receiver_sensitivity_dbm: float = -130.0
+    spreading_factor: int = Field(11, ge=5, le=12)
+    bandwidth_khz: float = Field(250.0, gt=0, le=500.0)
+    coding_rate: str = Field("4/5", pattern="^4/[5-8]$")
     environment: str = Field("suburban", pattern="^(los_elevated|open_rural|suburban|urban|indoor)$")
     max_radius_m: float = Field(15000.0, ge=100, le=200000)
     num_radials: int = Field(360, ge=36, le=720)
@@ -274,3 +286,6 @@ class TerrainCoverageGridRequest(BaseModel):
     # unexpectedly in some Pydantic v2 builds; handler validates values itself.
     pa_max_output_power_dbm: Optional[float] = None
     pa_input_range_max_dbm: Optional[float] = None
+    node_name: Optional[str] = None
+    use_field_calibration: bool = False
+    calibration_observations: list[CoverageCalibrationObservation] = Field(default_factory=list)

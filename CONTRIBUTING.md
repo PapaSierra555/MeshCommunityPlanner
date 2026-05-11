@@ -127,7 +127,7 @@ Then restart the backend. Verify `msgpack==1.1.0` is installed: `python -c "impo
 
 ### Code Style
 
-- **Python:** Follow PEP 8. Use `ruff` for linting.
+- **Python:** Follow PEP 8. Backend lint/type tooling is not configured yet; run the relevant pytest suite and review changes carefully.
 - **TypeScript:** Follow the existing ESLint configuration. Run `npm run lint`.
 - **Commits:** Write clear, concise commit messages describing the change.
 

@@ -28,6 +28,7 @@ import time
 from typing import Callable, Optional
 
 from backend.app.services.propagation.fspl import fspl_loss_db
+from backend.app.services.propagation.lora import lora_receiver_sensitivity_dbm
 from backend.app.services.link_analysis import (
     fresnel_zone_radius,
     estimate_diffraction_loss,
@@ -46,8 +47,9 @@ ENVIRONMENT_EXPONENTS: dict[str, float] = {
     "indoor": 4.5,
 }
 
-# Signal cutoff — stop radial sweep below this
-SIGNAL_CUTOFF_DBM = -135.0
+# Safety floor for radial sweep. The actual coverage cutoff is the receiver
+# sensitivity for the node's LoRa settings, clamped no weaker than this floor.
+SIGNAL_CUTOFF_FLOOR_DBM = -150.0
 
 # Default receiver height (handheld at ground level)
 RX_HEIGHT_M = 1.5
@@ -63,6 +65,30 @@ EFFECTIVE_EARTH_RADIUS_M = _K_FACTOR * 6_371_000.0  # ~8,494,667 m
 
 # Type alias for elevation read function
 ElevationReader = Callable[[float, float], Optional[int]]
+
+
+def haversine_distance_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance between two WGS84 points."""
+    r = 6_371_000.0
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+    return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def bearing_degrees(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Initial bearing from point 1 to point 2 in degrees."""
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_lambda = math.radians(lon2 - lon1)
+    y = math.sin(d_lambda) * math.cos(phi2)
+    x = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(d_lambda)
+    return (math.degrees(math.atan2(y, x)) + 360) % 360
 
 
 def destination_point(
@@ -114,6 +140,79 @@ def _environment_excess_loss(distance_m: float, exponent: float) -> float:
     return 10.0 * (exponent - 2.0) * math.log10(distance_m)
 
 
+def compute_terrain_signal_to_point(
+    tx_lat: float,
+    tx_lon: float,
+    rx_lat: float,
+    rx_lon: float,
+    antenna_height_m: float,
+    frequency_mhz: float,
+    tx_power_dbm: float,
+    antenna_gain_dbi: float,
+    cable_loss_db: float,
+    read_elevation: ElevationReader,
+    environment: str = "suburban",
+    sample_interval_m: float = 30.0,
+) -> float:
+    """Predict received signal at one point using the same terrain model as coverage grids."""
+    distance_total = haversine_distance_m(tx_lat, tx_lon, rx_lat, rx_lon)
+    if distance_total <= 1.0:
+        return tx_power_dbm + antenna_gain_dbi - cable_loss_db
+
+    env_n = ENVIRONMENT_EXPONENTS.get(environment, 3.3)
+    wavelength_m = C / (frequency_mhz * 1e6)
+    bearing = bearing_degrees(tx_lat, tx_lon, rx_lat, rx_lon)
+
+    tx_ground = read_elevation(tx_lat, tx_lon)
+    if tx_ground is None:
+        tx_ground = 0
+    tx_tip = tx_ground + antenna_height_m
+
+    best_obstacle_slope = -1e30
+    best_obstacle_elev = 0.0
+    best_obstacle_dist = 0.0
+
+    sample_count = max(1, int(distance_total / sample_interval_m))
+    for si in range(1, sample_count + 1):
+        distance = min(si * sample_interval_m, distance_total)
+        if distance >= distance_total:
+            break
+        pt_lat, pt_lon = destination_point(tx_lat, tx_lon, bearing, distance)
+        pt_elev_raw = read_elevation(pt_lat, pt_lon)
+        pt_elev = float(pt_elev_raw) if pt_elev_raw is not None else 0.0
+        earth_bulge = (distance * distance) / (2.0 * EFFECTIVE_EARTH_RADIUS_M)
+        pt_elev_curved = pt_elev + earth_bulge
+        terrain_slope = (pt_elev_curved - tx_tip) / distance
+        if terrain_slope > best_obstacle_slope:
+            best_obstacle_slope = terrain_slope
+            best_obstacle_elev = pt_elev_curved
+            best_obstacle_dist = distance
+
+    rx_ground_raw = read_elevation(rx_lat, rx_lon)
+    rx_ground = float(rx_ground_raw) if rx_ground_raw is not None else 0.0
+    rx_bulge = (distance_total * distance_total) / (2.0 * EFFECTIVE_EARTH_RADIUS_M)
+    rx_h = rx_ground + rx_bulge + RX_HEIGHT_M
+
+    diffraction_loss = 0.0
+    if 0 < best_obstacle_dist < distance_total:
+        los_h_at_obstacle = tx_tip + (rx_h - tx_tip) * (best_obstacle_dist / distance_total)
+        obstruction_m = best_obstacle_elev - los_h_at_obstacle
+        if obstruction_m > 0:
+            d1 = best_obstacle_dist
+            d2 = distance_total - best_obstacle_dist
+            fr = fresnel_zone_radius(wavelength_m, d1, d2)
+            diffraction_loss = estimate_diffraction_loss(obstruction_m, fr if fr > 0 else 1.0)
+
+    return (
+        tx_power_dbm
+        + antenna_gain_dbi
+        - cable_loss_db
+        - fspl_loss_db(distance_total, frequency_mhz)
+        - diffraction_loss
+        - _environment_excess_loss(distance_total, env_n)
+    )
+
+
 def compute_terrain_coverage_grid(
     tx_lat: float,
     tx_lon: float,
@@ -125,6 +224,10 @@ def compute_terrain_coverage_grid(
     receiver_sensitivity_dbm: float,
     read_elevation: ElevationReader,
     environment: str = "suburban",
+    spreading_factor: Optional[int] = None,
+    bandwidth_khz: Optional[float] = None,
+    coding_rate: str = "4/5",
+    calibration_offset_db: float = 0.0,
     num_radials: int = 360,
     max_radius_m: float = 15000.0,
     sample_interval_m: float = 30.0,
@@ -145,9 +248,13 @@ def compute_terrain_coverage_grid(
         tx_power_dbm: Transmit power (dBm).
         antenna_gain_dbi: Antenna gain (dBi).
         cable_loss_db: Cable/connector loss (dB).
-        receiver_sensitivity_dbm: Receiver sensitivity (dBm).
+        receiver_sensitivity_dbm: Receiver sensitivity fallback (dBm).
         read_elevation: Function(lat, lon) -> elevation_m or None.
         environment: "open"|"suburban"|"urban"|"indoor".
+        spreading_factor: Optional LoRa spreading factor for sensitivity derivation.
+        bandwidth_khz: Optional LoRa bandwidth for sensitivity derivation.
+        coding_rate: Optional LoRa coding rate for sensitivity derivation.
+        calibration_offset_db: Empirical signal correction from field observations.
         num_radials: Number of azimuth bearings (default 360).
         max_radius_m: Maximum sweep radius (m).
         sample_interval_m: Distance between samples (m).
@@ -159,6 +266,14 @@ def compute_terrain_coverage_grid(
 
     env_n = ENVIRONMENT_EXPONENTS.get(environment, 3.3)
     wavelength_m = C / (frequency_mhz * 1e6)
+    effective_sensitivity_dbm = receiver_sensitivity_dbm
+    if spreading_factor is not None and bandwidth_khz is not None:
+        effective_sensitivity_dbm = lora_receiver_sensitivity_dbm(
+            spreading_factor=spreading_factor,
+            bandwidth_khz=bandwidth_khz,
+            coding_rate=coding_rate,
+        )
+    signal_cutoff_dbm = max(effective_sensitivity_dbm, SIGNAL_CUTOFF_FLOOR_DBM)
 
     # TX ground elevation
     tx_ground = read_elevation(tx_lat, tx_lon)
@@ -256,10 +371,12 @@ def compute_terrain_coverage_grid(
                 - fspl
                 - diffraction_loss
                 - env_excess
+                + calibration_offset_db
             )
 
-            # Stop this radial if signal too weak
-            if signal_dbm < SIGNAL_CUTOFF_DBM:
+            # Stop this radial once the signal falls below the LoRa demodulation
+            # threshold for this node's SF/BW/CR settings.
+            if signal_dbm < signal_cutoff_dbm:
                 break
 
             points.append({
@@ -304,5 +421,8 @@ def compute_terrain_coverage_grid(
             "num_radials": num_radials,
             "elevation_reads": elevation_reads,
             "elevation_hits": elevation_hits,
+            "receiver_sensitivity_dbm": round(effective_sensitivity_dbm, 1),
+            "signal_cutoff_dbm": round(signal_cutoff_dbm, 1),
+            "calibration_offset_db": round(calibration_offset_db, 1),
         },
     }

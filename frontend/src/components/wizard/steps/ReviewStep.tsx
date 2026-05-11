@@ -4,15 +4,15 @@
  */
 
 import React from 'react';
-import type { Node } from '../../../types';
+import type { LegacyNodeCreatePayload, NodeWizardDraftField } from '../../../utils/nodeDomainAdapters';
 
 export interface ReviewStepProps {
-  data: Partial<Node>;
+  data: LegacyNodeCreatePayload;
   errors: Record<string, string>;
-  onChange: (field: string, value: any) => void;
+  onChange: (field: NodeWizardDraftField, value: LegacyNodeCreatePayload[NodeWizardDraftField]) => void;
 }
 
-export function ReviewStep({ data, errors, onChange }: ReviewStepProps) {
+export function ReviewStep({ data }: ReviewStepProps) {
   return (
     <div className="wizard-step review-step">
       <h3>Review Configuration</h3>
@@ -36,7 +36,7 @@ export function ReviewStep({ data, errors, onChange }: ReviewStepProps) {
           <dt>Device ID:</dt>
           <dd>{data.device_id || 'Not set'}</dd>
           <dt>Firmware:</dt>
-          <dd>{data.firmware_family || 'Not set'}</dd>
+          <dd>{data.firmware || 'Not set'}</dd>
         </dl>
       </div>
 
@@ -45,22 +45,36 @@ export function ReviewStep({ data, errors, onChange }: ReviewStepProps) {
         <dl>
           <dt>TX Power:</dt>
           <dd>{data.tx_power_dbm || 'Not set'} dBm</dd>
-          <dt>RX Sensitivity:</dt>
-          <dd>{data.rx_sensitivity_dbm || 'Not set'} dBm</dd>
+          <dt>Frequency:</dt>
+          <dd>{data.frequency_mhz || 'Not set'} MHz</dd>
           <dt>Region:</dt>
-          <dd>{data.region_code || 'Not set'}</dd>
+          <dd>{data.region || 'Not set'}</dd>
         </dl>
       </div>
 
       <div className="review-section">
         <h4>Antenna</h4>
         <dl>
-          <dt>Gain:</dt>
-          <dd>{data.antenna_gain_dbi || 'Not set'} dBi</dd>
+          <dt>Antenna ID:</dt>
+          <dd>{data.antenna_id || 'Not set'}</dd>
           <dt>Height:</dt>
           <dd>{data.antenna_height_m || 'Not set'} m</dd>
-          <dt>Cable Loss:</dt>
-          <dd>{data.cable_loss_db || 'Not set'} dB</dd>
+          <dt>Cable Length:</dt>
+          <dd>{data.cable_length_m || 'Not set'} m</dd>
+        </dl>
+      </div>
+
+      <div className="review-section">
+        <h4>Privacy & Domain</h4>
+        <dl>
+          <dt>Visibility:</dt>
+          <dd>{data.visibility || 'private'}</dd>
+          <dt>Coordinate Precision:</dt>
+          <dd>{data.coordinate_precision || 'exact'}</dd>
+          <dt>Node Role:</dt>
+          <dd>{data.node_role || 'planned'}</dd>
+          <dt>Node Status:</dt>
+          <dd>{data.node_status || 'planned'}</dd>
         </dl>
       </div>
     </div>

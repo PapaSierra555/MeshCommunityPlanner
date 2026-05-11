@@ -9,41 +9,27 @@ import { Toolbar } from './Toolbar';
 import type { PlanInfoEntry } from './Toolbar';
 import { StatusBar } from './StatusBar';
 import { MainContent } from './MainContent';
+import { AppDialogStack } from './AppDialogStack';
 import { usePlanStore } from '../../stores/planStore';
 import { useMapStore, ELEVATION_RANGE_BUILD_ID as BUILD_ID } from '../../stores/mapStore';
 import type { LOSOverlay, CoverageOverlay, TerrainCoverageOverlay, ViewshedOverlay, RoutePathOverlay } from '../../stores/mapStore';
 import { getAPIClient } from '../../services/api';
 import { renderCoverageCanvas } from '../../utils/coverageCanvas';
-import type { Plan, Node, CodingRate } from '../../types';
-import { LinkReportModal } from '../analysis/LinkReportModal';
-import { TimeOnAirModal } from '../analysis/TimeOnAirModal';
-import { RepeaterChainModal } from '../analysis/RepeaterChainModal';
-import { MeshCoreAirtimeModal } from '../analysis/MeshCoreAirtimeModal';
-import { MeshCoreCapacityModal } from '../analysis/MeshCoreCapacityModal';
-import { MeshCoreFreqCoordModal } from '../analysis/MeshCoreFreqCoordModal';
-import { ChannelCapacityModal } from '../analysis/ChannelCapacityModal';
-import { ReticulumAnnounceModal } from '../analysis/ReticulumAnnounceModal';
-import { RNSLinkBudgetModal } from '../analysis/RNSLinkBudgetModal';
-import { RNSTransportModal } from '../analysis/RNSTransportModal';
-import { RNSThroughputModal } from '../analysis/RNSThroughputModal';
-import { BOMModal } from '../bom/BOMModal';
+import type { CoordinatePrecision, FieldObservation, NodeLifecycleStatus, NodeRole, NodeVisibility, Plan, Node, CodingRate, Site, Mount, RadioProfile } from '../../types';
 import { exportNodesCSV, parseNodesCSV } from '../../utils/csv';
 import { exportKML, type KMLLink } from '../../utils/kml';
 import { exportGeoJSON, type GeoJSONLink } from '../../utils/geojson';
 import { findKShortestPaths } from '../../utils/routing';
-import { FloodingSimModal } from '../analysis/FloodingSimModal';
-import { PlacementSuggestModal } from '../analysis/PlacementSuggestModal';
-import { PDFReportModal } from '../analysis/PDFReportModal';
+import {
+  buildLegacyNodeCreatePayload,
+  buildMeshPlanMountExportRecord,
+  buildMeshPlanNodeExportRecord,
+  buildMeshPlanRadioProfileExportRecord,
+  buildMeshPlanSiteExportRecord,
+  remapMeshPlanNodeRelationshipFields,
+} from '../../utils/nodeDomainAdapters';
 import type { BOMPlanData, BOMNodeData } from '../bom/BOMModal';
-import { CatalogModal } from '../catalog';
-import { ErrorDialog } from '../common/ErrorDialog';
-import { ConfirmDialog } from '../common/ConfirmDialog';
-import { PromptDialog } from '../common/PromptDialog';
 import { NumberInput } from '../common/NumberInput';
-import { WelcomeTour } from '../onboarding/WelcomeTour';
-import { InternetMapImportModal } from '../plan/InternetMapImportModal';
-import { SignalImportModal } from '../plan/SignalImportModal';
-import { KMLExportDialog } from '../plan/KMLExportDialog';
 import './AppLayout.css';
 
 // ============================================================================
@@ -116,6 +102,35 @@ const COVERAGE_ENV_OPTIONS = [
   { value: 'indoor', label: 'Indoor' },
 ];
 
+const NODE_VISIBILITY_OPTIONS: Array<{ value: NodeVisibility; label: string }> = [
+  { value: 'private', label: 'Private' },
+  { value: 'community', label: 'Community' },
+  { value: 'public', label: 'Public' },
+];
+
+const COORDINATE_PRECISION_OPTIONS: Array<{ value: CoordinatePrecision; label: string }> = [
+  { value: 'exact', label: 'Exact' },
+  { value: 'approximate', label: 'Approximate' },
+  { value: 'hidden', label: 'Hidden' },
+];
+
+const NODE_ROLE_OPTIONS: Array<{ value: NodeRole; label: string }> = [
+  { value: 'client', label: 'Client' },
+  { value: 'repeater', label: 'Repeater' },
+  { value: 'gateway', label: 'Gateway' },
+  { value: 'sensor', label: 'Sensor' },
+  { value: 'planned', label: 'Planned' },
+  { value: 'experimental', label: 'Experimental' },
+];
+
+const NODE_STATUS_OPTIONS: Array<{ value: NodeLifecycleStatus; label: string }> = [
+  { value: 'candidate', label: 'Candidate' },
+  { value: 'planned', label: 'Planned' },
+  { value: 'active', label: 'Active' },
+  { value: 'retired', label: 'Retired' },
+  { value: 'rejected', label: 'Rejected' },
+];
+
 // Badge abbreviation + color for per-node environment override
 const ENV_BADGE: Record<string, { label: string; color: string }> = {
   los_elevated: { label: 'LOS', color: '#7fb3f0' },
@@ -145,14 +160,28 @@ function detectPreset(sf: number, bw: number, cr: string): string {
 // Realistic Coverage Model — Log-distance path loss + radio horizon
 // ============================================================================
 
-/** LoRa receiver sensitivity (dBm) by SF and BW — from Semtech SX1276/SX1262 datasheets */
-function loraSensitivityDbm(sf: number, bwKhz: number): number {
-  const table: Record<number, Record<number, number>> = {
-    125: { 7: -123, 8: -126, 9: -129, 10: -132, 11: -135, 12: -137 },
-    250: { 5: -111, 7: -120, 8: -123, 9: -125, 10: -128, 11: -131, 12: -134 },
-    500: { 5: -109, 7: -116, 8: -119, 9: -122, 10: -125, 11: -128, 12: -130 },
+/** LoRa receiver sensitivity estimate from SF/BW/CR. Mirrors backend propagation/lora.py. */
+function loraSensitivityDbm(sf: number, bwKhz: number, codingRate: string): number {
+  const requiredSnrBySf: Record<number, number> = {
+    5: -2.5,
+    6: -5.0,
+    7: -7.5,
+    8: -10.0,
+    9: -12.5,
+    10: -15.0,
+    11: -17.5,
+    12: -20.0,
   };
-  return table[bwKhz]?.[sf] ?? -120;
+  const codingGainDb: Record<string, number> = {
+    '4/5': 0.0,
+    '4/6': 0.7,
+    '4/7': 1.2,
+    '4/8': 1.5,
+  };
+  const requiredSnr = requiredSnrBySf[sf] ?? -7.5;
+  const bandwidthHz = Math.max(bwKhz, 1) * 1000;
+  const noiseFigureDb = 6.0;
+  return -174 + 10 * Math.log10(bandwidthHz) + noiseFigureDb + requiredSnr - (codingGainDb[codingRate] ?? 0);
 }
 
 /** Device default antenna gain (dBi) — approximate values for built-in / bundled antennas */
@@ -224,10 +253,11 @@ function computeRealisticCoverageM(
   frequencyMhz: number,
   sf: number,
   bwKhz: number,
+  codingRate: string,
   antennaHeightM: number,
   environment: string,
 ): { radiusM: number; sensitivityDbm: number; linkBudgetDb: number; horizonM: number; modelRadiusM: number; envLabel: string } {
-  const sensitivity = loraSensitivityDbm(sf, bwKhz);
+  const sensitivity = loraSensitivityDbm(sf, bwKhz, codingRate);
   const antennaGain = DEVICE_ANTENNA_GAIN[deviceId] ?? 3.0;
   const env = COVERAGE_ENVIRONMENTS[environment] || COVERAGE_ENVIRONMENTS['suburban'];
 
@@ -271,6 +301,53 @@ function sanitizeFilename(name: string): string {
   return name.replace(/[^a-z0-9_-]/gi, '_');
 }
 
+function buildExportPrivacyMetadata(nodes: Node[]) {
+  const hiddenCoordinates = nodes.filter((node) => node.coordinate_precision === 'hidden').length;
+  const approximateCoordinates = nodes.filter((node) => node.coordinate_precision === 'approximate').length;
+
+  return {
+    privacy_notice: 'Exports preserve node privacy metadata, but coordinates are exported as stored.',
+    node_privacy_fields: ['visibility', 'coordinate_precision', 'node_role', 'node_status'],
+    coordinate_precision_counts: {
+      exact: nodes.filter((node) => !node.coordinate_precision || node.coordinate_precision === 'exact').length,
+      approximate: approximateCoordinates,
+      hidden: hiddenCoordinates,
+    },
+  };
+}
+
+function stripServerManagedFields<T extends Record<string, unknown>>(record: T): Partial<T> {
+  const payload = { ...record };
+  delete payload.id;
+  delete payload.plan_id;
+  delete payload.created_at;
+  delete payload.updated_at;
+  return payload;
+}
+
+async function loadMeshPlanDomainCollections(api: ReturnType<typeof getAPIClient>, planId: string) {
+  try {
+    const [sites, mounts, radioProfiles] = await Promise.all([
+      api.listSites(planId),
+      api.listMounts(planId),
+      api.listRadioProfiles(planId),
+    ]);
+
+    return {
+      sites: sites.items.map(buildMeshPlanSiteExportRecord),
+      mounts: mounts.items.map(buildMeshPlanMountExportRecord),
+      radio_profiles: radioProfiles.items.map(buildMeshPlanRadioProfileExportRecord),
+    };
+  } catch (err) {
+    console.warn('Relationship collection export failed; continuing with node-only meshplan export.', err);
+    return {
+      sites: [] as Partial<Site>[],
+      mounts: [] as Partial<Mount>[],
+      radio_profiles: [] as Partial<RadioProfile>[],
+    };
+  }
+}
+
 
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -291,7 +368,8 @@ export function AppLayout() {
   const [coverageEnv, setCoverageEnv] = useState(savedCoverageSettings?.env ?? 'suburban');
   const [maxRadiusKm, setMaxRadiusKm] = useState(savedCoverageSettings?.maxRadiusKm ?? 15);
   const [rememberCoverageSettings, setRememberCoverageSettings] = useState(!!savedCoverageSettings);
-  const [lastRunCoverageSettings, setLastRunCoverageSettings] = useState<{ env: string; maxRadiusKm: number } | null>(null);
+  const [useFieldCalibration, setUseFieldCalibration] = useState(false);
+  const [lastRunCoverageSettings, setLastRunCoverageSettings] = useState<{ env: string; maxRadiusKm: number; calibrated: boolean } | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const losCancelRef = useRef(false);
   const [checkedPlanIds, setCheckedPlanIds] = useState<Set<string>>(new Set());
@@ -323,6 +401,9 @@ export function AppLayout() {
   const [internetMapImportOpen, setInternetMapImportOpen] = useState(false);
   const [isInternetOnline, setIsInternetOnline] = useState<boolean | null>(null);
   const [signalImportOpen, setSignalImportOpen] = useState(false);
+  const [fieldObservationsOpen, setFieldObservationsOpen] = useState(false);
+  const [fieldObservationEntryOpen, setFieldObservationEntryOpen] = useState(false);
+  const [fieldObservationEditTarget, setFieldObservationEditTarget] = useState<FieldObservation | null>(null);
   const [bulkCoverageEnv, setBulkCoverageEnv] = useState('');
   const [envWarningDialog, setEnvWarningDialog] = useState<{
     nodeNames: string;
@@ -375,6 +456,11 @@ export function AppLayout() {
   const clearCoverageOverlays = useMapStore((s) => s.clearCoverageOverlays);
   const setTerrainCoverageOverlays = useMapStore((s) => s.setTerrainCoverageOverlays);
   const clearTerrainCoverageOverlays = useMapStore((s) => s.clearTerrainCoverageOverlays);
+  const fieldObservations = useMapStore((s) => s.field_observations);
+  const setFieldObservations = useMapStore((s) => s.setFieldObservations);
+  const clearFieldObservations = useMapStore((s) => s.clearFieldObservations);
+  const fieldObservationDraft = useMapStore((s) => s.field_observation_draft);
+  const setFieldObservationDraft = useMapStore((s) => s.setFieldObservationDraft);
   const setViewshedOverlays = useMapStore((s) => s.setViewshedOverlays);
   const clearViewshedOverlays = useMapStore((s) => s.clearViewshedOverlays);
   const setRoutePathOverlays = useMapStore((s) => s.setRoutePathOverlays);
@@ -447,6 +533,31 @@ export function AppLayout() {
       .catch(() => setIsInternetOnline(false));
   }, []);
 
+  const loadFieldObservations = useCallback(async () => {
+    if (!currentPlan) {
+      clearFieldObservations();
+      return;
+    }
+    try {
+      const page = await api.listFieldObservations(currentPlan.id);
+      setFieldObservations(page.items);
+    } catch (err) {
+      console.error('Failed to load field observations:', err);
+      setFieldObservations([]);
+    }
+  }, [api, currentPlan, clearFieldObservations, setFieldObservations]);
+
+  useEffect(() => {
+    loadFieldObservations();
+  }, [loadFieldObservations]);
+
+  useEffect(() => {
+    if (fieldObservationDraft) {
+      setFieldObservationEditTarget(null);
+      setFieldObservationEntryOpen(true);
+    }
+  }, [fieldObservationDraft]);
+
   const handleCatalogClose = useCallback(() => {
     setCatalogModalOpen(false);
     loadCatalogData(); // refresh dropdowns after catalog edits
@@ -472,6 +583,7 @@ export function AppLayout() {
         node.frequency_mhz,
         node.spreading_factor,
         node.bandwidth_khz,
+        node.coding_rate,
         node.antenna_height_m,
         coverageEnv,
       );
@@ -586,6 +698,7 @@ export function AppLayout() {
       networkRadio.frequency_mhz,
       networkRadio.spreading_factor,
       networkRadio.bandwidth_khz,
+      networkRadio.coding_rate,
       antennaHeight,
       coverageEnv,
     );
@@ -678,7 +791,7 @@ export function AppLayout() {
       setPlan(plan);
       setLoadedPlanObjects([plan]);
       const resp = await api.listNodes(plan.id);
-      const nodeList = Array.isArray(resp) ? resp : (resp as any).items || [];
+      const nodeList = resp.items;
       setNodes(nodeList);
       setShowPlanList(false);
       setCheckedPlanIds(new Set());
@@ -705,7 +818,7 @@ export function AppLayout() {
       let allNodes: Node[] = [];
       for (const plan of selectedPlans) {
         const resp = await api.listNodes(plan.id);
-        const nodeList = Array.isArray(resp) ? resp : (resp as any).items || [];
+        const nodeList = resp.items;
         allNodes = allNodes.concat(nodeList);
       }
       // Use first plan as the "active" plan for sidebar
@@ -737,9 +850,11 @@ export function AppLayout() {
     setStatusMessage('Exporting plan...');
     try {
       const planNodes = usePlanStore.getState().nodes;
+      const relationshipCollections = await loadMeshPlanDomainCollections(api, currentPlan.id);
       const exportData = {
         version: '0.1.0',
         exported_at: new Date().toISOString(),
+        export_metadata: buildExportPrivacyMetadata(planNodes),
         plan: {
           name: currentPlan.name,
           description: currentPlan.description || '',
@@ -747,29 +862,8 @@ export function AppLayout() {
           region: currentPlan.region,
           lock_node_positions: useMapStore.getState().lockNodePositions,
         },
-        nodes: planNodes.map((n) => ({
-          name: n.name,
-          latitude: n.latitude,
-          longitude: n.longitude,
-          antenna_height_m: n.antenna_height_m,
-          device_id: n.device_id,
-          firmware: n.firmware,
-          region: n.region,
-          frequency_mhz: n.frequency_mhz,
-          tx_power_dbm: n.tx_power_dbm,
-          spreading_factor: n.spreading_factor,
-          bandwidth_khz: n.bandwidth_khz,
-          coding_rate: n.coding_rate,
-          modem_preset: n.modem_preset,
-          antenna_id: n.antenna_id,
-          cable_id: n.cable_id,
-          cable_length_m: n.cable_length_m,
-          pa_module_id: n.pa_module_id,
-          is_solar: n.is_solar,
-          desired_coverage_radius_m: n.desired_coverage_radius_m,
-          notes: n.notes,
-          sort_order: n.sort_order,
-        })),
+        ...relationshipCollections,
+        nodes: planNodes.map(buildMeshPlanNodeExportRecord),
       };
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       triggerDownload(blob, `${sanitizeFilename(currentPlan.name)}.meshplan.json`);
@@ -777,7 +871,7 @@ export function AppLayout() {
     } catch (err: any) {
       setStatusMessage(`Export error: ${err.message}`);
     }
-  }, [currentPlan]);
+  }, [api, currentPlan]);
 
   const handleImportPlan = useCallback(() => {
     const input = document.createElement('input');
@@ -821,15 +915,84 @@ export function AppLayout() {
               region: data.plan.region || 'us_fcc',
             });
 
+            const siteIds = new Map<string, string>();
+            const mountIds = new Map<string, string>();
+            const radioProfileIds = new Map<string, string>();
+
+            if (Array.isArray(data.sites)) {
+              for (const site of data.sites) {
+                if (!site?.id) continue;
+                try {
+                  const createdSite = await api.createSite(
+                    plan.id,
+                    stripServerManagedFields(site) as Partial<Site>
+                  );
+                  siteIds.set(String(site.id), createdSite.id);
+                } catch (siteErr: any) {
+                  console.error(`Failed to import site "${site.name || site.id}":`, siteErr);
+                }
+              }
+            }
+
+            if (Array.isArray(data.radio_profiles)) {
+              for (const radioProfile of data.radio_profiles) {
+                if (!radioProfile?.id) continue;
+                try {
+                  const createdRadioProfile = await api.createRadioProfile(
+                    plan.id,
+                    stripServerManagedFields(radioProfile) as Partial<RadioProfile>
+                  );
+                  radioProfileIds.set(String(radioProfile.id), createdRadioProfile.id);
+                } catch (radioErr: any) {
+                  console.error(`Failed to import radio profile "${radioProfile.name || radioProfile.id}":`, radioErr);
+                }
+              }
+            }
+
+            if (Array.isArray(data.mounts)) {
+              for (const mount of data.mounts) {
+                if (!mount?.id) continue;
+                const siteId = typeof mount.site_id === 'string' ? siteIds.get(mount.site_id) : undefined;
+                if (!siteId) {
+                  console.error(`Failed to import mount "${mount.id}": missing imported site relationship.`);
+                  continue;
+                }
+
+                try {
+                  const createdMount = await api.createMount(
+                    plan.id,
+                    {
+                      ...stripServerManagedFields(mount),
+                      site_id: siteId,
+                    } as Partial<Mount>
+                  );
+                  mountIds.set(String(mount.id), createdMount.id);
+                } catch (mountErr: any) {
+                  console.error(`Failed to import mount "${mount.id}":`, mountErr);
+                }
+              }
+            }
+
             const importedNodes: Node[] = [];
             if (Array.isArray(data.nodes)) {
               for (const nd of data.nodes) {
                 try {
-                  const created = await api.createNode(plan.id, {
+                  const created = await api.createNode(plan.id, buildLegacyNodeCreatePayload({
+                    region: plan.region || 'us_fcc',
+                  }, {
                     name: nd.name || 'Imported Node',
                     latitude: nd.latitude,
                     longitude: nd.longitude,
                     antenna_height_m: nd.antenna_height_m ?? 3,
+                    ...remapMeshPlanNodeRelationshipFields(nd, {
+                      siteIds,
+                      mountIds,
+                      radioProfileIds,
+                    }),
+                    visibility: nd.visibility || 'private',
+                    coordinate_precision: nd.coordinate_precision || 'exact',
+                    node_role: nd.node_role || 'planned',
+                    node_status: nd.node_status || 'planned',
                     device_id: nd.device_id || 'tbeam-supreme',
                     firmware: nd.firmware || 'meshtastic',
                     region: nd.region || plan.region || 'us_fcc',
@@ -846,7 +1009,7 @@ export function AppLayout() {
                     is_solar: nd.is_solar ?? false,
                     desired_coverage_radius_m: nd.desired_coverage_radius_m ?? null,
                     notes: nd.notes || '',
-                  });
+                  }));
                   importedNodes.push(created);
                 } catch (nodeErr: any) {
                   console.error(`Failed to import node "${nd.name}":`, nodeErr);
@@ -895,7 +1058,7 @@ export function AppLayout() {
       const csvStr = exportNodesCSV(planNodes);
       const blob = new Blob([csvStr], { type: 'text/csv' });
       triggerDownload(blob, `${sanitizeFilename(currentPlan.name)}_nodes.csv`);
-      setStatusMessage(`Exported ${planNodes.length} node(s) as CSV.`);
+      setStatusMessage(`Exported ${planNodes.length} node(s) as CSV with privacy metadata columns.`);
     } catch (err: any) {
       setErrorMsg(`CSV export error: ${err.message}`);
     }
@@ -925,6 +1088,10 @@ export function AppLayout() {
           coding_rate: refNode?.coding_rate || '4/5',
           antenna_id: refNode?.antenna_id || '915-3dbi-omni',
           is_solar: false,
+          visibility: refNode?.visibility || 'private',
+          coordinate_precision: refNode?.coordinate_precision || 'exact',
+          node_role: refNode?.node_role || 'planned',
+          node_status: refNode?.node_status || 'planned',
         };
         const { nodes: parsedNodes, errors } = parseNodesCSV(text, defaults);
         if (errors.length > 0 && parsedNodes.length === 0) {
@@ -935,11 +1102,15 @@ export function AppLayout() {
         const newNodes: Node[] = [];
         for (const nd of parsedNodes) {
           try {
-            const node = await api.createNode(currentPlan.id, {
+            const node = await api.createNode(currentPlan.id, buildLegacyNodeCreatePayload(defaults, {
               name: nd.name || 'Imported Node',
               latitude: nd.latitude!,
               longitude: nd.longitude!,
               antenna_height_m: nd.antenna_height_m ?? 3,
+              visibility: nd.visibility || 'private',
+              coordinate_precision: nd.coordinate_precision || 'exact',
+              node_role: nd.node_role || 'planned',
+              node_status: nd.node_status || 'planned',
               device_id: nd.device_id || defaults.device_id!,
               firmware: nd.firmware || defaults.firmware!,
               region: nd.region || defaults.region!,
@@ -956,7 +1127,7 @@ export function AppLayout() {
               is_solar: nd.is_solar ?? false,
               desired_coverage_radius_m: nd.desired_coverage_radius_m ?? null,
               notes: nd.notes || '',
-            });
+            }));
             newNodes.push(node);
             created++;
           } catch (err: any) {
@@ -1013,6 +1184,10 @@ export function AppLayout() {
           coding_rate: refNode?.coding_rate || '4/5',
           antenna_id: refNode?.antenna_id || '915-3dbi-omni',
           is_solar: false,
+          visibility: refNode?.visibility || 'private',
+          coordinate_precision: refNode?.coordinate_precision || 'exact',
+          node_role: refNode?.node_role || 'planned',
+          node_status: refNode?.node_status || 'planned',
         };
 
         const errors: string[] = [];
@@ -1072,11 +1247,15 @@ export function AppLayout() {
         const newNodes: Node[] = [];
         for (const nd of candidates) {
           try {
-            const node = await api.createNode(currentPlan.id, {
+            const node = await api.createNode(currentPlan.id, buildLegacyNodeCreatePayload(defaults, {
               name: nd.name || 'Imported Node',
               latitude: nd.latitude,
               longitude: nd.longitude,
               antenna_height_m: nd.antenna_height_m ?? defaults.antenna_height_m ?? 3,
+              visibility: 'private',
+              coordinate_precision: 'exact',
+              node_role: 'planned',
+              node_status: 'planned',
               device_id: defaults.device_id!,
               firmware: defaults.firmware!,
               region: defaults.region!,
@@ -1093,7 +1272,7 @@ export function AppLayout() {
               is_solar: false,
               desired_coverage_radius_m: null,
               notes: '',
-            });
+            }));
             newNodes.push(node);
             created++;
           } catch (err: any) {
@@ -1194,7 +1373,7 @@ export function AppLayout() {
       const blob = new Blob([geojsonStr], { type: 'application/geo+json' });
       triggerDownload(blob, `${sanitizeFilename(currentPlan.name)}.geojson`);
       const linkNote = geojsonLinks && geojsonLinks.length > 0 ? ` with ${geojsonLinks.length} link(s)` : '';
-      setStatusMessage(`Exported ${planNodes.length} node(s) as GeoJSON${linkNote}.`);
+      setStatusMessage(`Exported ${planNodes.length} node(s) as GeoJSON${linkNote} with privacy metadata.`);
     } catch (err: any) {
       setErrorMsg(`GeoJSON export error: ${err.message}`);
     }
@@ -1208,7 +1387,25 @@ export function AppLayout() {
     grid_resolution_m: number;
     max_candidates: number;
   }) => {
-    const result = await api.suggestPlacement(params);
+    const currentNodes = usePlanStore.getState().nodes;
+    const nodeByPlacementKey = new Map(
+      currentNodes.map((node) => [
+        `${node.name}|${node.latitude}|${node.longitude}`,
+        node,
+      ]),
+    );
+    const result = await api.suggestPlacement({
+      ...params,
+      existing_nodes: params.existing_nodes.map((node) => {
+        const planNode = nodeByPlacementKey.get(`${node.name}|${node.latitude}|${node.longitude}`);
+        return {
+          node_id: String(planNode?.id ?? node.name),
+          latitude: node.latitude,
+          longitude: node.longitude,
+          coverage_radius_m: planNode?.desired_coverage_radius_m ?? params.coverage_radius_m,
+        };
+      }),
+    });
     return (result.candidates || []).map((c: any) => ({
       latitude: c.latitude,
       longitude: c.longitude,
@@ -1222,28 +1419,33 @@ export function AppLayout() {
     if (!currentPlan) return;
     const refNode = usePlanStore.getState().nodes[0];
     try {
-      const node = await api.createNode(currentPlan.id, {
-        name,
-        latitude: lat,
-        longitude: lon,
-        antenna_height_m: 3,
-        device_id: refNode?.device_id || 'tbeam-supreme',
-        firmware: refNode?.firmware || 'meshtastic',
+      const node = await api.createNode(currentPlan.id, buildLegacyNodeCreatePayload({
+        visibility: refNode?.visibility,
+        coordinate_precision: refNode?.coordinate_precision,
+        device_id: refNode?.device_id,
+        firmware: refNode?.firmware,
         region: refNode?.region || currentPlan.region || 'us_fcc',
         frequency_mhz: refNode?.frequency_mhz || 906.875,
         tx_power_dbm: refNode?.tx_power_dbm || 20,
         spreading_factor: refNode?.spreading_factor || 11,
         bandwidth_khz: refNode?.bandwidth_khz || 250,
         coding_rate: refNode?.coding_rate || '4/5',
+        antenna_id: refNode?.antenna_id,
+      }, {
+        name,
+        latitude: lat,
+        longitude: lon,
+        antenna_height_m: 3,
+        node_role: 'planned',
+        node_status: 'candidate',
         modem_preset: null,
-        antenna_id: refNode?.antenna_id || '915-3dbi-omni',
         cable_id: null,
         cable_length_m: 0,
         pa_module_id: null,
         is_solar: false,
         desired_coverage_radius_m: null,
         notes: '',
-      });
+      }));
       const existingNodes = usePlanStore.getState().nodes;
       setNodes([...existingNodes, node]);
       setStatusMessage(`Node "${name}" created at ${lat.toFixed(5)}, ${lon.toFixed(5)}.`);
@@ -1512,6 +1714,10 @@ export function AppLayout() {
         latitude: node.latitude,
         longitude: node.longitude,
         antenna_height_m: node.antenna_height_m,
+        visibility: node.visibility,
+        coordinate_precision: node.coordinate_precision,
+        node_role: node.node_role,
+        node_status: node.node_status,
         device_id: node.device_id,
         tx_power_dbm: node.tx_power_dbm,
         is_solar: node.is_solar,
@@ -1711,7 +1917,9 @@ export function AppLayout() {
     if (envOverride) setCoverageEnv(envOverride);
 
     const envLabel = COVERAGE_ENVIRONMENTS[activeEnv]?.label || 'Suburban';
-    setStatusMessage(`Computing terrain-aware ${envLabel} coverage for ${targetNodes.length} node(s)...`);
+    const calibrationCandidateCount = fieldObservations.filter((obs) => obs.success && obs.ack_db != null).length;
+    const calibrationActive = useFieldCalibration && calibrationCandidateCount > 0;
+    setStatusMessage(`Computing ${calibrationActive ? 'field-calibrated ' : ''}terrain-aware ${envLabel} coverage for ${targetNodes.length} node(s)...`);
     setAnalysisLoading(true);
     clearCoverageOverlays();
     clearTerrainCoverageOverlays();
@@ -1723,7 +1931,7 @@ export function AppLayout() {
 
     for (let i = 0; i < targetNodes.length; i++) {
       const node = targetNodes[i];
-      setStatusMessage(`Computing terrain coverage for "${node.name}" (${i + 1}/${targetNodes.length})...`);
+      setStatusMessage(`Computing ${calibrationActive ? 'field-calibrated ' : ''}terrain coverage for "${node.name}" (${i + 1}/${targetNodes.length})...`);
 
       try {
         // Per-node override takes priority; fall back to global panel setting
@@ -1737,7 +1945,15 @@ export function AppLayout() {
           const nums = (pa.input_power_range ?? '').match(/\b\d+(?:\.\d+)?/g);
           paInputRangeMaxDbm = nums ? parseFloat(nums[nums.length - 1]) : 22;
         }
-        const result = await api.getTerrainCoverageGrid(node, nodeEnv, maxRadiusKm * 1000, paMaxOutputDbm, paInputRangeMaxDbm);
+        const result = await api.getTerrainCoverageGrid(
+          node,
+          nodeEnv,
+          maxRadiusKm * 1000,
+          paMaxOutputDbm,
+          paInputRangeMaxDbm,
+          fieldObservations,
+          calibrationActive,
+        );
 
         // Render to canvas before discarding raw points — they are NOT stored in state
         const canvasResult = renderCoverageCanvas(
@@ -1779,6 +1995,11 @@ export function AppLayout() {
 
         totalTimeMs += result.computation_time_ms;
         elevSource = result.elevation_source;
+        const used = result.stats?.calibration_observations_used ?? 0;
+        const offset = result.stats?.calibration_offset_db ?? 0;
+        if (calibrationActive && used > 0) {
+          console.info(`Coverage calibration for ${node.name}: ${used} observation(s), ${offset.toFixed(1)} dB offset`);
+        }
       } catch (err: any) {
         console.warn(`Terrain coverage failed for ${node.name}, falling back to circle:`, err);
         // Fallback to client-side circle
@@ -1789,6 +2010,7 @@ export function AppLayout() {
           node.frequency_mhz,
           node.spreading_factor,
           node.bandwidth_khz,
+          node.coding_rate,
           node.antenna_height_m,
           fallbackEnv,
         );
@@ -1814,15 +2036,16 @@ export function AppLayout() {
     const elevNote = elevSource.startsWith('srtm') ? ` [${elevSource}]` : ' [no terrain data]';
     const parts: string[] = [];
     if (terrainOverlays.length > 0) {
-      parts.push(`${terrainOverlays.length} terrain heat map(s), ${totalPoints.toLocaleString()} pts, ${(totalTimeMs / 1000).toFixed(1)}s${elevNote}`);
+      parts.push(`${terrainOverlays.length} ${calibrationActive ? 'field-calibrated ' : ''}terrain heat map(s), ${totalPoints.toLocaleString()} pts, ${(totalTimeMs / 1000).toFixed(1)}s${elevNote}`);
     }
     if (fallbackOverlays.length > 0) {
       parts.push(`${fallbackOverlays.length} circle fallback(s)`);
     }
-    setStatusMessage(`Coverage (${envLabel}): ${parts.join(', ')}. Click overlays for details.`);
-    setLastRunCoverageSettings({ env: activeEnv, maxRadiusKm });
+    const calibrationNote = useFieldCalibration && !calibrationActive ? ' Field calibration skipped: no successful ACK SNR observations.' : '';
+    setStatusMessage(`Coverage (${envLabel}): ${parts.join(', ')}. Click overlays for details.${calibrationNote}`);
+    setLastRunCoverageSettings({ env: activeEnv, maxRadiusKm, calibrated: calibrationActive });
     setAnalysisLoading(false);
-  }, [currentPlan, selectedNodeIds, nodes, coverageEnv, maxRadiusKm, api, analysisLoading, setCoverageOverlays, clearCoverageOverlays, setTerrainCoverageOverlays, clearTerrainCoverageOverlays]);
+  }, [currentPlan, selectedNodeIds, nodes, coverageEnv, maxRadiusKm, api, analysisLoading, setCoverageOverlays, clearCoverageOverlays, setTerrainCoverageOverlays, clearTerrainCoverageOverlays, fieldObservations, useFieldCalibration]);
 
   const handleCoverageAnalysis = useCallback(() => {
     if (!currentPlan || analysisLoading) return;
@@ -2247,9 +2470,11 @@ export function AppLayout() {
       });
       const newNodes: Node[] = [];
       for (const n of srcNodes) {
-        const created = await api.createNode(newPlan.id, {
+        const created = await api.createNode(newPlan.id, buildLegacyNodeCreatePayload({}, {
           name: n.name, latitude: n.latitude, longitude: n.longitude,
           antenna_height_m: n.antenna_height_m, device_id: n.device_id,
+          visibility: n.visibility, coordinate_precision: n.coordinate_precision,
+          node_role: n.node_role, node_status: n.node_status,
           firmware: n.firmware, region: n.region, frequency_mhz: n.frequency_mhz,
           tx_power_dbm: n.tx_power_dbm, spreading_factor: n.spreading_factor,
           bandwidth_khz: n.bandwidth_khz, coding_rate: n.coding_rate,
@@ -2258,7 +2483,7 @@ export function AppLayout() {
           pa_module_id: n.pa_module_id, is_solar: n.is_solar,
           desired_coverage_radius_m: n.desired_coverage_radius_m,
           notes: n.notes, sort_order: n.sort_order,
-        });
+        }));
         newNodes.push(created);
       }
       setPlan(newPlan);
@@ -2314,10 +2539,12 @@ export function AppLayout() {
         const plan = plans.find((p) => p.id === planId);
         if (!plan) continue;
         const resp = await api.listNodes(planId);
-        const nodeList = Array.isArray(resp) ? resp : (resp as any).items || [];
+        const nodeList = resp.items;
+        const relationshipCollections = await loadMeshPlanDomainCollections(api, planId);
         const exportData = {
           version: '0.1.0',
           exported_at: new Date().toISOString(),
+          export_metadata: buildExportPrivacyMetadata(nodeList),
           plan: {
             name: plan.name,
             description: (plan as any).description || '',
@@ -2325,18 +2552,8 @@ export function AppLayout() {
             region: plan.region,
             lock_node_positions: useMapStore.getState().lockNodePositions,
           },
-          nodes: nodeList.map((n: Node) => ({
-            name: n.name, latitude: n.latitude, longitude: n.longitude,
-            antenna_height_m: n.antenna_height_m, device_id: n.device_id,
-            firmware: n.firmware, region: n.region, frequency_mhz: n.frequency_mhz,
-            tx_power_dbm: n.tx_power_dbm, spreading_factor: n.spreading_factor,
-            bandwidth_khz: n.bandwidth_khz, coding_rate: n.coding_rate,
-            modem_preset: n.modem_preset, antenna_id: n.antenna_id,
-            cable_id: n.cable_id, cable_length_m: n.cable_length_m,
-            pa_module_id: n.pa_module_id, is_solar: n.is_solar,
-            desired_coverage_radius_m: n.desired_coverage_radius_m,
-            notes: n.notes, sort_order: n.sort_order,
-          })),
+          ...relationshipCollections,
+          nodes: nodeList.map(buildMeshPlanNodeExportRecord),
         };
         const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
         triggerDownload(blob, `${sanitizeFilename(plan.name)}.meshplan.json`);
@@ -2487,194 +2704,269 @@ export function AppLayout() {
         </div>
         {!configCollapsed && (
           <>
-            <div className="config-field">
-              <label>Name</label>
-              <input type="text" value={selectedNode.name}
-                title="Display name for this node"
-                onChange={(e) => updateNodeStore(String(selectedNode.id), { name: e.target.value })}
-                onBlur={(e) => handleUpdateNodeField(String(selectedNode.id), 'name', e.target.value)}
-              />
-            </div>
-            <div className="config-field">
-              <label>Latitude</label>
-              <NumberInput step={0.00001} value={selectedNode.latitude}
-                title="Node latitude in decimal degrees. Drag the marker on the map to reposition."
-                onChange={(v) => { updateNodeStore(String(selectedNode.id), { latitude: v }); handleUpdateNodeField(String(selectedNode.id), 'latitude', v); }}
-              />
-            </div>
-            <div className="config-field">
-              <label>Longitude</label>
-              <NumberInput step={0.00001} value={selectedNode.longitude}
-                title="Node longitude in decimal degrees. Drag the marker on the map to reposition."
-                onChange={(v) => { updateNodeStore(String(selectedNode.id), { longitude: v }); handleUpdateNodeField(String(selectedNode.id), 'longitude', v); }}
-              />
-            </div>
-            <div className="config-field">
-              <label>Antenna Height (m)</label>
-              <NumberInput step={0.5} min={0} max={500} value={selectedNode.antenna_height_m}
-                title="Height above ground in meters. Higher = better coverage and radio horizon."
-                onChange={(v) => { updateNodeStore(String(selectedNode.id), { antenna_height_m: v }); handleUpdateNodeField(String(selectedNode.id), 'antenna_height_m', v); }}
-              />
-            </div>
-            <div className="config-field">
-              <label>Device</label>
-              <select value={selectedNode.device_id}
-                title="Hardware device model. Affects antenna gain and capabilities."
-                onChange={(e) => handleDeviceChange(String(selectedNode.id), e.target.value)}>
-                {catalogDevices.length > 0
-                  ? catalogDevices.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}{d.is_custom ? ' (custom)' : ''}</option>
-                  ))
-                  : <>
-                    <option value="tbeam-supreme">LilyGO T-Beam Supreme</option>
-                    <option value="techo">LilyGO T-Echo</option>
-                    <option value="canaryone">CanaryOne</option>
-                    <option value="rak-wisblock-starter">RAK WisBlock Starter</option>
-                    <option value="rak4631">RAK4631</option>
-                    <option value="heltec-v2">Heltec LoRa V2</option>
-                    <option value="heltec-v3">Heltec LoRa V3</option>
-                    <option value="heltec-v4">Heltec LoRa V4</option>
-                    <option value="t114-v2">Mesh Node T114 V2</option>
-                    <option value="t1000-e">Seeed T1000-E</option>
-                    <option value="xiaos3-wio">XiaoS3 WIO + SX1262</option>
-                  </>
-                }
-              </select>
-            </div>
-            {(() => {
-              const device = catalogDevices.find((d: any) => d.id === selectedNode.device_id);
-              const pa = catalogPAModules.find((p: any) => p.id === selectedNode.pa_module_id) ?? null;
-              // Device hardware output limit
-              const deviceMaxTx: number = device?.max_tx_power_dbm ?? 30;
-              // PA input range max — parsed from "0-22 dBm" → 22
-              const paInputMax: number | null = pa
-                ? (() => { const m = (pa.input_power_range ?? '').match(/\b\d+(?:\.\d+)?/g); return m ? parseFloat(m[m.length - 1]) : 22; })()
-                : null;
-              const paGain: number = pa ? (pa.max_output_power_dbm - (paInputMax ?? 22)) : 0;
-              const effectiveOutputDbm: number = pa
-                ? Math.min(selectedNode.tx_power_dbm + paGain, pa.max_output_power_dbm)
-                : selectedNode.tx_power_dbm;
-              // Warning tiers
-              const overdrivingDevice = selectedNode.tx_power_dbm > deviceMaxTx;
-              const overdrivingPaInput = pa !== null && selectedNode.tx_power_dbm > (paInputMax ?? 22);
-              // >= 30 dBm = 1W — the FCC Part 15 / ETSI unlicensed limit
-              const exceedsRegulatory = !overdrivingDevice && !overdrivingPaInput && effectiveOutputDbm >= 30;
-              const effectiveW = Math.pow(10, (effectiveOutputDbm - 30) / 10);
-              return (<>
-                <div className="config-field">
-                  <label htmlFor="txPowerDbm">TX Power (dBm)</label>
-                  <NumberInput id="txPowerDbm" step={1} min={0} max={47}
-                    value={selectedNode.tx_power_dbm}
-                    title="Transmit power in dBm. 30 dBm = 1W (FCC Part 15 / ETSI unlicensed limit). Higher values supported for licensed or non-permissive environments."
-                    onChange={(v) => { updateNodeStore(String(selectedNode.id), { tx_power_dbm: v }); handleUpdateNodeField(String(selectedNode.id), 'tx_power_dbm', v); }}
-                  />
-                </div>
-                {/* PA info always shown when PA is present — even alongside warnings */}
-                {pa && (
-                  <p className="sidebar-hint" style={{ marginBottom: '0.25rem' }}>
-                    PA output: {effectiveOutputDbm.toFixed(1)} dBm ({selectedNode.tx_power_dbm} dBm device + {paGain} dB gain) ≈ {effectiveW.toFixed(2)}W
-                  </p>
-                )}
-                {overdrivingDevice && (
-                  <p className="sidebar-hint" style={{ marginBottom: '0.25rem', color: '#e74c3c' }}>
-                    ⚠ {selectedNode.tx_power_dbm} dBm exceeds device limit ({deviceMaxTx} dBm). Simulation only — do not transmit.
-                  </p>
-                )}
-                {!overdrivingDevice && overdrivingPaInput && (
-                  <p className="sidebar-hint" style={{ marginBottom: '0.25rem', color: '#e74c3c' }}>
-                    ⚠ {selectedNode.tx_power_dbm} dBm overdrives PA input (max {paInputMax} dBm). Simulation only — do not transmit.
-                  </p>
-                )}
-                {exceedsRegulatory && (
-                  <p className="sidebar-hint" style={{ marginBottom: '0.25rem', color: 'var(--color-warning, #e67e22)' }}>
-                    {effectiveOutputDbm.toFixed(1)} dBm ≈ {effectiveW.toFixed(2)}W — at or above 1W unlicensed limit. Use only where permitted.
-                  </p>
-                )}
-                {/* No-PA watt note when TX is meaningfully high */}
-                {!pa && selectedNode.tx_power_dbm >= 27 && !overdrivingDevice && (
-                  <p className="sidebar-hint" style={{ marginBottom: '0.25rem' }}>
-                    {selectedNode.tx_power_dbm} dBm ≈ {Math.pow(10, (selectedNode.tx_power_dbm - 30) / 10).toFixed(2)}W
-                  </p>
-                )}
-              </>);
-            })()}
-            <div className="config-field">
-              <label>Antenna</label>
-              <select value={selectedNode.antenna_id || ''}
-                title="Antenna model. Affects gain and coverage."
-                onChange={(e) => { updateNodeStore(String(selectedNode.id), { antenna_id: e.target.value }); handleUpdateNodeField(String(selectedNode.id), 'antenna_id', e.target.value); }}>
-                {catalogAntennas.length > 0
-                  ? catalogAntennas.map((a) => (
-                    <option key={a.id} value={a.id}>{a.name} ({a.gain_dbi} dBi){a.is_default ? ' (default)' : ''}</option>
-                  ))
-                  : <option value="">-- No antennas loaded --</option>
-                }
-              </select>
-            </div>
-            <div className="config-field">
-              <label>Cable</label>
-              <select value={selectedNode.cable_id || ''}
-                title="Coaxial cable type. Adds signal loss proportional to length."
-                onChange={(e) => { updateNodeStore(String(selectedNode.id), { cable_id: e.target.value || null }); handleUpdateNodeField(String(selectedNode.id), 'cable_id', e.target.value || null); }}>
-                <option value="">None (direct connect)</option>
-                {catalogCables.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name} ({c.cable_type})</option>
-                ))}
-              </select>
-            </div>
-            {selectedNode.cable_id && (
+            <div className="config-field-group" aria-labelledby="node-config-site-heading">
+              <h4 id="node-config-site-heading" className="config-group-title" style={{ margin: '0 0 0.45rem', paddingBottom: '0.25rem', borderBottom: '1px solid #34495e', color: '#ecf0f1', fontSize: '0.78rem' }}>Site</h4>
               <div className="config-field">
-                <label>Cable Length (m)</label>
-                <NumberInput step={0.1} min={0} max={100} value={selectedNode.cable_length_m || 0}
-                  title="Cable length in meters. Longer cable = more signal loss."
-                  onChange={(v) => { updateNodeStore(String(selectedNode.id), { cable_length_m: v }); handleUpdateNodeField(String(selectedNode.id), 'cable_length_m', v); }}
+                <label>Name</label>
+                <input type="text" value={selectedNode.name}
+                  title="Display name for this node"
+                  onChange={(e) => updateNodeStore(String(selectedNode.id), { name: e.target.value })}
+                  onBlur={(e) => handleUpdateNodeField(String(selectedNode.id), 'name', e.target.value)}
                 />
               </div>
-            )}
-            <div className="config-field">
-              <label>PA Module</label>
-              <select value={selectedNode.pa_module_id || ''}
-                title="External power amplifier module. Boosts transmit power."
-                onChange={(e) => { updateNodeStore(String(selectedNode.id), { pa_module_id: e.target.value || null }); handleUpdateNodeField(String(selectedNode.id), 'pa_module_id', e.target.value || null); }}>
-                <option value="">None</option>
-                {catalogPAModules.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.max_output_power_dbm} dBm)</option>
-                ))}
-              </select>
+              <div className="config-field">
+                <label>Latitude</label>
+                <NumberInput step={0.00001} value={selectedNode.latitude}
+                  title="Node latitude in decimal degrees. Drag the marker on the map to reposition."
+                  onChange={(v) => { updateNodeStore(String(selectedNode.id), { latitude: v }); handleUpdateNodeField(String(selectedNode.id), 'latitude', v); }}
+                />
+              </div>
+              <div className="config-field">
+                <label>Longitude</label>
+                <NumberInput step={0.00001} value={selectedNode.longitude}
+                  title="Node longitude in decimal degrees. Drag the marker on the map to reposition."
+                  onChange={(v) => { updateNodeStore(String(selectedNode.id), { longitude: v }); handleUpdateNodeField(String(selectedNode.id), 'longitude', v); }}
+                />
+              </div>
+              <div className="config-field">
+                <label>Visibility</label>
+                <select
+                  value={selectedNode.visibility || 'private'}
+                  title="Controls how this node should be shared outside the plan."
+                  onChange={(e) => {
+                    const value = e.target.value as NodeVisibility;
+                    updateNodeStore(String(selectedNode.id), { visibility: value });
+                    handleUpdateNodeField(String(selectedNode.id), 'visibility', value);
+                  }}
+                >
+                  {NODE_VISIBILITY_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="config-field">
+                <label>Coordinate Precision</label>
+                <select
+                  value={selectedNode.coordinate_precision || 'exact'}
+                  title="Controls whether this node's coordinates are exact, approximate, or hidden in shared outputs."
+                  onChange={(e) => {
+                    const value = e.target.value as CoordinatePrecision;
+                    updateNodeStore(String(selectedNode.id), { coordinate_precision: value });
+                    handleUpdateNodeField(String(selectedNode.id), 'coordinate_precision', value);
+                  }}
+                >
+                  {COORDINATE_PRECISION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="config-field">
+                <label>Node Role</label>
+                <select
+                  value={selectedNode.node_role || 'planned'}
+                  title="Functional role of this node in the mesh."
+                  onChange={(e) => {
+                    const value = e.target.value as NodeRole;
+                    updateNodeStore(String(selectedNode.id), { node_role: value });
+                    handleUpdateNodeField(String(selectedNode.id), 'node_role', value);
+                  }}
+                >
+                  {NODE_ROLE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="config-field">
+                <label>Node Status</label>
+                <select
+                  value={selectedNode.node_status || 'planned'}
+                  title="Planning lifecycle status for this node."
+                  onChange={(e) => {
+                    const value = e.target.value as NodeLifecycleStatus;
+                    updateNodeStore(String(selectedNode.id), { node_status: value });
+                    handleUpdateNodeField(String(selectedNode.id), 'node_status', value);
+                  }}
+                >
+                  {NODE_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="config-field" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <input type="checkbox" checked={selectedNode.is_solar}
+                  title="Check if this node has solar power for battery calculations"
+                  onChange={(e) => { updateNodeStore(String(selectedNode.id), { is_solar: e.target.checked }); handleUpdateNodeField(String(selectedNode.id), 'is_solar', e.target.checked); }}
+                />
+                <label style={{ margin: 0 }}>Is the node solar powered?</label>
+              </div>
+              <div className="config-field">
+                <label>Notes</label>
+                <textarea value={selectedNode.notes || ''} rows={2}
+                  title="Free-form notes about this node (location details, mount info, etc.)"
+                  onChange={(e) => updateNodeStore(String(selectedNode.id), { notes: e.target.value })}
+                  onBlur={(e) => handleUpdateNodeField(String(selectedNode.id), 'notes', e.target.value)}
+                />
+              </div>
             </div>
-            <div className="config-field" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <input type="checkbox" checked={selectedNode.is_solar}
-                title="Check if this node has solar power for battery calculations"
-                onChange={(e) => { updateNodeStore(String(selectedNode.id), { is_solar: e.target.checked }); handleUpdateNodeField(String(selectedNode.id), 'is_solar', e.target.checked); }}
-              />
-              <label style={{ margin: 0 }}>Is the node solar powered?</label>
+
+            <div className="config-field-group" aria-labelledby="node-config-mount-heading">
+              <h4 id="node-config-mount-heading" className="config-group-title" style={{ margin: '0.75rem 0 0.45rem', paddingBottom: '0.25rem', borderBottom: '1px solid #34495e', color: '#ecf0f1', fontSize: '0.78rem' }}>Mount</h4>
+              <div className="config-field">
+                <label>Antenna Height (m)</label>
+                <NumberInput step={0.5} min={0} max={500} value={selectedNode.antenna_height_m}
+                  title="Height above ground in meters. Higher = better coverage and radio horizon."
+                  onChange={(v) => { updateNodeStore(String(selectedNode.id), { antenna_height_m: v }); handleUpdateNodeField(String(selectedNode.id), 'antenna_height_m', v); }}
+                />
+              </div>
+              <div className="config-field">
+                <label>Antenna</label>
+                <select value={selectedNode.antenna_id || ''}
+                  title="Antenna model. Affects gain and coverage."
+                  onChange={(e) => { updateNodeStore(String(selectedNode.id), { antenna_id: e.target.value }); handleUpdateNodeField(String(selectedNode.id), 'antenna_id', e.target.value); }}>
+                  {catalogAntennas.length > 0
+                    ? catalogAntennas.map((a) => (
+                      <option key={a.id} value={a.id}>{a.name} ({a.gain_dbi} dBi){a.is_default ? ' (default)' : ''}</option>
+                    ))
+                    : <option value="">-- No antennas loaded --</option>
+                  }
+                </select>
+              </div>
+              <div className="config-field">
+                <label>Cable</label>
+                <select value={selectedNode.cable_id || ''}
+                  title="Coaxial cable type. Adds signal loss proportional to length."
+                  onChange={(e) => { updateNodeStore(String(selectedNode.id), { cable_id: e.target.value || null }); handleUpdateNodeField(String(selectedNode.id), 'cable_id', e.target.value || null); }}>
+                  <option value="">None (direct connect)</option>
+                  {catalogCables.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.cable_type})</option>
+                  ))}
+                </select>
+              </div>
+              {selectedNode.cable_id && (
+                <div className="config-field">
+                  <label>Cable Length (m)</label>
+                  <NumberInput step={0.1} min={0} max={100} value={selectedNode.cable_length_m || 0}
+                    title="Cable length in meters. Longer cable = more signal loss."
+                    onChange={(v) => { updateNodeStore(String(selectedNode.id), { cable_length_m: v }); handleUpdateNodeField(String(selectedNode.id), 'cable_length_m', v); }}
+                  />
+                </div>
+              )}
+              <div className="config-field">
+                <label>Coverage Environment</label>
+                <select
+                  value={selectedNode.coverage_environment ?? ''}
+                  title="Per-node coverage environment override. Leave as 'Inherit' to use the global panel setting."
+                  onChange={(e) => {
+                    const val = e.target.value || null;
+                    updateNodeStore(String(selectedNode.id), { coverage_environment: val });
+                    handleUpdateNodeField(String(selectedNode.id), 'coverage_environment', val);
+                  }}
+                >
+                  {COVERAGE_ENV_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <p className="sidebar-hint" style={{ marginTop: '0.25rem', marginBottom: 0 }}>
+                  Overrides the global environment for this node's coverage simulation. Leave as 'Inherit' to use the panel setting.
+                </p>
+              </div>
             </div>
-            <div className="config-field">
-              <label>Coverage Environment</label>
-              <select
-                value={selectedNode.coverage_environment ?? ''}
-                title="Per-node coverage environment override. Leave as 'Inherit' to use the global panel setting."
-                onChange={(e) => {
-                  const val = e.target.value || null;
-                  updateNodeStore(String(selectedNode.id), { coverage_environment: val });
-                  handleUpdateNodeField(String(selectedNode.id), 'coverage_environment', val);
-                }}
-              >
-                {COVERAGE_ENV_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-              <p className="sidebar-hint" style={{ marginTop: '0.25rem', marginBottom: 0 }}>
-                Overrides the global environment for this node's coverage simulation. Leave as 'Inherit' to use the panel setting.
-              </p>
-            </div>
-            <div className="config-field">
-              <label>Notes</label>
-              <textarea value={selectedNode.notes || ''} rows={2}
-                title="Free-form notes about this node (location details, mount info, etc.)"
-                onChange={(e) => updateNodeStore(String(selectedNode.id), { notes: e.target.value })}
-                onBlur={(e) => handleUpdateNodeField(String(selectedNode.id), 'notes', e.target.value)}
-              />
+
+            <div className="config-field-group" aria-labelledby="node-config-radio-profile-heading">
+              <h4 id="node-config-radio-profile-heading" className="config-group-title" style={{ margin: '0.75rem 0 0.45rem', paddingBottom: '0.25rem', borderBottom: '1px solid #34495e', color: '#ecf0f1', fontSize: '0.78rem' }}>Radio Profile</h4>
+              <div className="config-field">
+                <label>Device</label>
+                <select value={selectedNode.device_id}
+                  title="Hardware device model. Affects antenna gain and capabilities."
+                  onChange={(e) => handleDeviceChange(String(selectedNode.id), e.target.value)}>
+                  {catalogDevices.length > 0
+                    ? catalogDevices.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}{d.is_custom ? ' (custom)' : ''}</option>
+                    ))
+                    : <>
+                      <option value="tbeam-supreme">LilyGO T-Beam Supreme</option>
+                      <option value="techo">LilyGO T-Echo</option>
+                      <option value="canaryone">CanaryOne</option>
+                      <option value="rak-wisblock-starter">RAK WisBlock Starter</option>
+                      <option value="rak4631">RAK4631</option>
+                      <option value="heltec-v2">Heltec LoRa V2</option>
+                      <option value="heltec-v3">Heltec LoRa V3</option>
+                      <option value="heltec-v4">Heltec LoRa V4</option>
+                      <option value="t114-v2">Mesh Node T114 V2</option>
+                      <option value="t1000-e">Seeed T1000-E</option>
+                      <option value="xiaos3-wio">XiaoS3 WIO + SX1262</option>
+                    </>
+                  }
+                </select>
+              </div>
+              {(() => {
+                const device = catalogDevices.find((d: any) => d.id === selectedNode.device_id);
+                const pa = catalogPAModules.find((p: any) => p.id === selectedNode.pa_module_id) ?? null;
+                // Device hardware output limit
+                const deviceMaxTx: number = device?.max_tx_power_dbm ?? 30;
+                // PA input range max — parsed from "0-22 dBm" → 22
+                const paInputMax: number | null = pa
+                  ? (() => { const m = (pa.input_power_range ?? '').match(/\b\d+(?:\.\d+)?/g); return m ? parseFloat(m[m.length - 1]) : 22; })()
+                  : null;
+                const paGain: number = pa ? (pa.max_output_power_dbm - (paInputMax ?? 22)) : 0;
+                const effectiveOutputDbm: number = pa
+                  ? Math.min(selectedNode.tx_power_dbm + paGain, pa.max_output_power_dbm)
+                  : selectedNode.tx_power_dbm;
+                // Warning tiers
+                const overdrivingDevice = selectedNode.tx_power_dbm > deviceMaxTx;
+                const overdrivingPaInput = pa !== null && selectedNode.tx_power_dbm > (paInputMax ?? 22);
+                // >= 30 dBm = 1W — the FCC Part 15 / ETSI unlicensed limit
+                const exceedsRegulatory = !overdrivingDevice && !overdrivingPaInput && effectiveOutputDbm >= 30;
+                const effectiveW = Math.pow(10, (effectiveOutputDbm - 30) / 10);
+                return (<>
+                  <div className="config-field">
+                    <label htmlFor="txPowerDbm">TX Power (dBm)</label>
+                    <NumberInput id="txPowerDbm" step={1} min={0} max={47}
+                      value={selectedNode.tx_power_dbm}
+                      title="Transmit power in dBm. 30 dBm = 1W (FCC Part 15 / ETSI unlicensed limit). Higher values supported for licensed or non-permissive environments."
+                      onChange={(v) => { updateNodeStore(String(selectedNode.id), { tx_power_dbm: v }); handleUpdateNodeField(String(selectedNode.id), 'tx_power_dbm', v); }}
+                    />
+                  </div>
+                  {/* PA info always shown when PA is present — even alongside warnings */}
+                  {pa && (
+                    <p className="sidebar-hint" style={{ marginBottom: '0.25rem' }}>
+                      PA output: {effectiveOutputDbm.toFixed(1)} dBm ({selectedNode.tx_power_dbm} dBm device + {paGain} dB gain) ≈ {effectiveW.toFixed(2)}W
+                    </p>
+                  )}
+                  {overdrivingDevice && (
+                    <p className="sidebar-hint" style={{ marginBottom: '0.25rem', color: '#e74c3c' }}>
+                      ⚠ {selectedNode.tx_power_dbm} dBm exceeds device limit ({deviceMaxTx} dBm). Simulation only — do not transmit.
+                    </p>
+                  )}
+                  {!overdrivingDevice && overdrivingPaInput && (
+                    <p className="sidebar-hint" style={{ marginBottom: '0.25rem', color: '#e74c3c' }}>
+                      ⚠ {selectedNode.tx_power_dbm} dBm overdrives PA input (max {paInputMax} dBm). Simulation only — do not transmit.
+                    </p>
+                  )}
+                  {exceedsRegulatory && (
+                    <p className="sidebar-hint" style={{ marginBottom: '0.25rem', color: 'var(--color-warning, #e67e22)' }}>
+                      {effectiveOutputDbm.toFixed(1)} dBm ≈ {effectiveW.toFixed(2)}W — at or above 1W unlicensed limit. Use only where permitted.
+                    </p>
+                  )}
+                  {/* No-PA watt note when TX is meaningfully high */}
+                  {!pa && selectedNode.tx_power_dbm >= 27 && !overdrivingDevice && (
+                    <p className="sidebar-hint" style={{ marginBottom: '0.25rem' }}>
+                      {selectedNode.tx_power_dbm} dBm ≈ {Math.pow(10, (selectedNode.tx_power_dbm - 30) / 10).toFixed(2)}W
+                    </p>
+                  )}
+                </>);
+              })()}
+              <div className="config-field">
+                <label>PA Module</label>
+                <select value={selectedNode.pa_module_id || ''}
+                  title="External power amplifier module. Boosts transmit power."
+                  onChange={(e) => { updateNodeStore(String(selectedNode.id), { pa_module_id: e.target.value || null }); handleUpdateNodeField(String(selectedNode.id), 'pa_module_id', e.target.value || null); }}>
+                  <option value="">None</option>
+                  {catalogPAModules.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({p.max_output_power_dbm} dBm)</option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="config-actions">
               <button className="sidebar-btn sidebar-btn-save" type="button" onClick={handleSaveNode}
@@ -2710,6 +3002,7 @@ export function AppLayout() {
         onImportFromMap={() => setInternetMapImportOpen(true)}
         isInternetOnline={isInternetOnline}
         onImportSignal={() => setSignalImportOpen(true)}
+        onFieldObservations={() => setFieldObservationsOpen(true)}
         onExportKML={handleExportKML}
         onExportGeoJSON={handleExportGeoJSON}
         onDuplicatePlan={handleDuplicatePlan}
@@ -3043,11 +3336,27 @@ export function AppLayout() {
                         );
                       })()}
                       {lastRunCoverageSettings && terrainCoverageOverlays.length > 0 &&
-                        (lastRunCoverageSettings.env !== coverageEnv || lastRunCoverageSettings.maxRadiusKm !== maxRadiusKm) && (
+                        (lastRunCoverageSettings.env !== coverageEnv || lastRunCoverageSettings.maxRadiusKm !== maxRadiusKm || lastRunCoverageSettings.calibrated !== useFieldCalibration) && (
                         <p className="sidebar-hint" style={{ marginBottom: '0.25rem', color: 'var(--color-warning, #e67e22)' }}>
                           Settings changed — re-run analysis to update.
                         </p>
                       )}
+                      <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <input
+                          type="checkbox"
+                          id="useFieldCalibration"
+                          checked={useFieldCalibration}
+                          onChange={(e) => setUseFieldCalibration(e.target.checked)}
+                          disabled={fieldObservations.filter((obs) => obs.success && obs.ack_db != null).length === 0}
+                          title="Use successful Meshtastic ACK SNR observations to apply a median RSSI residual correction to each ACK relay's heatmap."
+                        />
+                        <label htmlFor="useFieldCalibration" className="sidebar-hint" style={{ margin: 0, cursor: 'pointer' }}>
+                          Field-calibrated heatmap
+                        </label>
+                      </div>
+                      <p className="sidebar-hint" style={{ marginBottom: 0, marginTop: '0.2rem' }}>
+                        {fieldObservations.filter((obs) => obs.success && obs.ack_db != null).length} successful ACK SNR observation{fieldObservations.filter((obs) => obs.success && obs.ack_db != null).length === 1 ? '' : 's'} available
+                      </p>
                       <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                         <input
                           type="checkbox"
@@ -3211,166 +3520,127 @@ export function AppLayout() {
         <MainContent />
       </div>
       <StatusBar status={buildStatus()} isLoading={analysisLoading} />
-      {/* Blocking overlay — prevents interaction while terrain analysis runs */}
-      {analysisLoading && (
-        <div
-          className="analysis-loading-overlay"
-          role="progressbar"
-          aria-label="Analysis in progress"
-          aria-busy="true"
-        >
-          <div className="analysis-loading-box">
-            <span className="analysis-loading-spinner" aria-hidden="true" />
-            <span className="analysis-loading-text">{buildStatus()}</span>
-            <button
-              className="analysis-loading-cancel"
-              type="button"
-              onClick={() => { losCancelRef.current = true; setAnalysisLoading(false); setStatusMessage('Analysis cancelled.'); }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-      {/* Environment warning — shown before compute starts */}
-      <ConfirmDialog
-        isOpen={!!envWarningDialog}
-        title="Environment Recommendation"
-        message={`${envWarningDialog?.nodeNames} — the current environment underestimates coverage for elevated nodes. Switch to Clear LOS (Elevated) for accurate simulation?`}
-        confirmText="Switch to Clear LOS & Run"
-        cancelText="Run Anyway"
-        onConfirm={envWarningDialog?.onSwitch ?? (() => {})}
-        onCancel={envWarningDialog?.onRunAnyway ?? (() => {})}
-      />
-      <LinkReportModal isOpen={showLinkReport} onClose={() => setShowLinkReport(false)} onExportPDF={handleExportNetworkPDF} />
-      <RepeaterChainModal isOpen={showRepeaterChain} onClose={() => setShowRepeaterChain(false)} />
-      <MeshCoreAirtimeModal isOpen={showMeshCoreAirtime} onClose={() => setShowMeshCoreAirtime(false)} />
-      <MeshCoreCapacityModal isOpen={showMeshCoreCapacity} onClose={() => setShowMeshCoreCapacity(false)} />
-      <MeshCoreFreqCoordModal isOpen={showMeshCoreFreqCoord} onClose={() => setShowMeshCoreFreqCoord(false)} />
-      <TimeOnAirModal
-        isOpen={showTimeOnAir}
-        onClose={() => setShowTimeOnAir(false)}
+      <AppDialogStack
+        analysisLoading={analysisLoading}
+        analysisStatus={buildStatus()}
+        onCancelAnalysis={() => { losCancelRef.current = true; setAnalysisLoading(false); setStatusMessage('Analysis cancelled.'); }}
+        envWarningDialog={envWarningDialog}
+        showLinkReport={showLinkReport}
+        onCloseLinkReport={() => setShowLinkReport(false)}
+        onExportNetworkPDF={handleExportNetworkPDF}
+        showRepeaterChain={showRepeaterChain}
+        onCloseRepeaterChain={() => setShowRepeaterChain(false)}
+        showMeshCoreAirtime={showMeshCoreAirtime}
+        onCloseMeshCoreAirtime={() => setShowMeshCoreAirtime(false)}
+        showMeshCoreCapacity={showMeshCoreCapacity}
+        onCloseMeshCoreCapacity={() => setShowMeshCoreCapacity(false)}
+        showMeshCoreFreqCoord={showMeshCoreFreqCoord}
+        onCloseMeshCoreFreqCoord={() => setShowMeshCoreFreqCoord(false)}
+        showTimeOnAir={showTimeOnAir}
+        onCloseTimeOnAir={() => setShowTimeOnAir(false)}
         catalogModemPresets={catalogModemPresets}
         currentPresetSF={networkRadio.spreading_factor}
         currentPresetBW={networkRadio.bandwidth_khz}
         currentPresetCR={networkRadio.coding_rate}
         catalogDevices={catalogDevices}
         currentDeviceId={selectedNode?.device_id}
-      />
-      <ChannelCapacityModal
-        isOpen={showChannelCapacity}
-        onClose={() => setShowChannelCapacity(false)}
-        catalogModemPresets={catalogModemPresets}
-        currentPresetSF={networkRadio.spreading_factor}
-        currentPresetBW={networkRadio.bandwidth_khz}
-        currentPresetCR={networkRadio.coding_rate}
+        showChannelCapacity={showChannelCapacity}
+        onCloseChannelCapacity={() => setShowChannelCapacity(false)}
         currentNodeCount={nodes.length}
-      />
-      <ReticulumAnnounceModal
-        isOpen={showReticulumAnnounce}
-        onClose={() => setShowReticulumAnnounce(false)}
-      />
-      <RNSLinkBudgetModal
-        isOpen={showRNSLinkBudget}
-        onClose={() => setShowRNSLinkBudget(false)}
-      />
-      <RNSTransportModal
-        isOpen={showRNSTransport}
-        onClose={() => setShowRNSTransport(false)}
-      />
-      <RNSThroughputModal
-        isOpen={showRNSThroughput}
-        onClose={() => setShowRNSThroughput(false)}
-      />
-      <BOMModal
-        isOpen={showBOM}
-        onClose={() => setShowBOM(false)}
+        showReticulumAnnounce={showReticulumAnnounce}
+        onCloseReticulumAnnounce={() => setShowReticulumAnnounce(false)}
+        showRNSLinkBudget={showRNSLinkBudget}
+        onCloseRNSLinkBudget={() => setShowRNSLinkBudget(false)}
+        showRNSTransport={showRNSTransport}
+        onCloseRNSTransport={() => setShowRNSTransport(false)}
+        showRNSThroughput={showRNSThroughput}
+        onCloseRNSThroughput={() => setShowRNSThroughput(false)}
+        showBOM={showBOM}
+        onCloseBOM={() => setShowBOM(false)}
         bomData={bomData}
-        loading={bomLoading}
-        error={bomError}
-        onExportCSV={() => handleBOMExport('csv')}
-        onExportPDF={() => handleBOMExport('pdf')}
-        onExportCards={() => handleBOMExport('cards')}
-        exporting={bomExporting}
-      />
-      <WelcomeTour key={tourForceKey} forceShow={tourForceKey > 0} />
-      <InternetMapImportModal
-        isOpen={internetMapImportOpen}
-        onClose={() => setInternetMapImportOpen(false)}
-        planId={currentPlan?.id ?? null}
-      />
-      <SignalImportModal
-        isOpen={signalImportOpen}
-        onClose={() => setSignalImportOpen(false)}
-        planNodes={nodes.filter((n) => n.plan_id === currentPlan?.id).map((n) => ({ id: String(n.id), name: n.name }))}
-      />
-      <CatalogModal
-        isOpen={catalogModalOpen}
-        onClose={handleCatalogClose}
-        forceTour={catalogTourForce}
-        onTourComplete={() => setCatalogTourForce(false)}
-      />
-      {kmlExportDialog && (
-        <KMLExportDialog
-          nodeCount={kmlExportDialog.nodeCount}
-          linkCount={kmlExportDialog.linkCount}
-          onClose={() => setKmlExportDialog(null)}
-        />
-      )}
-      {errorMsg && <ErrorDialog message={errorMsg} onClose={() => setErrorMsg(null)} />}
-      <ConfirmDialog
-        isOpen={confirmDialog !== null}
-        message={confirmDialog?.message ?? ''}
-        title={confirmDialog?.title}
-        variant={confirmDialog?.variant}
-        confirmText={confirmDialog?.confirmText}
-        onConfirm={() => { confirmDialog?.onConfirm(); }}
-        onCancel={() => setConfirmDialog(null)}
-      />
-      <ConfirmDialog
-        isOpen={exitDialogOpen}
-        title="Exit Application"
-        message="Closing this tab or window will close the Mesh Community Planner app. Are you sure?"
-        confirmText="Exit"
-        cancelText="Cancel"
-        variant="danger"
-        showCloseButton
-        closeOnBackdrop={false}
-        onConfirm={handleExitConfirm}
-        onCancel={() => setExitDialogOpen(false)}
-      />
-      <PromptDialog
-        isOpen={promptDialog !== null}
-        message={promptDialog?.message ?? ''}
-        defaultValue={promptDialog?.defaultValue ?? ''}
-        placeholder={promptDialog?.placeholder}
-        onSubmit={(v) => { promptDialog?.onSubmit(v); }}
-        onCancel={() => setPromptDialog(null)}
-      />
-      <FloodingSimModal
-        isOpen={showFloodingSim}
-        onClose={() => setShowFloodingSim(false)}
-        nodes={nodes.map((n) => ({ id: String(n.id), uuid: String(n.id), name: n.name }))}
+        bomLoading={bomLoading}
+        bomError={bomError}
+        onExportBOMCSV={() => handleBOMExport('csv')}
+        onExportBOMPDF={() => handleBOMExport('pdf')}
+        onExportBOMCards={() => handleBOMExport('cards')}
+        bomExporting={bomExporting}
+        tourForceKey={tourForceKey}
+        internetMapImportOpen={internetMapImportOpen}
+        onCloseInternetMapImport={() => setInternetMapImportOpen(false)}
+        currentPlanId={currentPlan?.id ?? null}
+        signalImportOpen={signalImportOpen}
+        onCloseSignalImport={() => setSignalImportOpen(false)}
+        signalImportPlanNodes={nodes.filter((n) => n.plan_id === currentPlan?.id).map((n) => ({ id: String(n.id), name: n.name }))}
+        fieldObservationsOpen={fieldObservationsOpen}
+        onCloseFieldObservations={() => setFieldObservationsOpen(false)}
+        fieldObservations={fieldObservations}
+        onRefreshFieldObservations={loadFieldObservations}
+        onStartFieldObservationEntryMode={() => {
+          setFieldObservationsOpen(false);
+          setFieldObservationEditTarget(null);
+          setFieldObservationDraft(null);
+          setMode('add_field_observation');
+          setStatusMessage('Field test entry mode active. Click the map to add observations.');
+        }}
+        fieldObservationEntryOpen={fieldObservationEntryOpen}
+        fieldObservationEntryCoordinates={fieldObservationDraft}
+        fieldObservationEditTarget={fieldObservationEditTarget}
+        fieldObservationPlanNodes={nodes.filter((n) => n.plan_id === currentPlan?.id)}
+        fieldObservationEntryModeActive={mapMode === 'add_field_observation'}
+        onCloseFieldObservationEntry={() => {
+          setFieldObservationEntryOpen(false);
+          setFieldObservationEditTarget(null);
+          setFieldObservationDraft(null);
+        }}
+        onStopFieldObservationEntryMode={() => {
+          setMode('view');
+          setFieldObservationEntryOpen(false);
+          setFieldObservationEditTarget(null);
+          setFieldObservationDraft(null);
+          setStatusMessage('Field test entry mode stopped.');
+        }}
+        onEditFieldObservation={(observation) => {
+          setFieldObservationsOpen(false);
+          setFieldObservationDraft(null);
+          setFieldObservationEditTarget(observation);
+          setFieldObservationEntryOpen(true);
+        }}
+        catalogModalOpen={catalogModalOpen}
+        onCloseCatalog={handleCatalogClose}
+        catalogTourForce={catalogTourForce}
+        onCatalogTourComplete={() => setCatalogTourForce(false)}
+        kmlExportDialog={kmlExportDialog}
+        onCloseKMLExportDialog={() => setKmlExportDialog(null)}
+        errorMsg={errorMsg}
+        onCloseError={() => setErrorMsg(null)}
+        confirmDialog={confirmDialog}
+        onConfirmDialogConfirm={() => { confirmDialog?.onConfirm(); }}
+        onConfirmDialogCancel={() => setConfirmDialog(null)}
+        exitDialogOpen={exitDialogOpen}
+        onExitConfirm={handleExitConfirm}
+        onExitCancel={() => setExitDialogOpen(false)}
+        promptDialog={promptDialog}
+        onPromptSubmit={(v) => { promptDialog?.onSubmit(v); }}
+        onPromptCancel={() => setPromptDialog(null)}
+        showFloodingSim={showFloodingSim}
+        onCloseFloodingSim={() => setShowFloodingSim(false)}
+        floodingNodes={nodes.map((n) => ({ id: String(n.id), uuid: String(n.id), name: n.name }))}
         losOverlays={losOverlays}
         radioSF={networkRadio.spreading_factor}
         radioBW={networkRadio.bandwidth_khz}
         radioCR={networkRadio.coding_rate}
-      />
-      <PlacementSuggestModal
-        isOpen={showPlacementSuggest}
-        onClose={() => setShowPlacementSuggest(false)}
-        nodes={nodes.map((n) => ({ latitude: n.latitude, longitude: n.longitude, uuid: String(n.id), name: n.name }))}
+        showPlacementSuggest={showPlacementSuggest}
+        onClosePlacementSuggest={() => setShowPlacementSuggest(false)}
+        placementNodes={nodes.map((n) => ({ latitude: n.latitude, longitude: n.longitude, uuid: String(n.id), name: n.name }))}
         nodeRangeM={nodeRangeInfo.rangeM}
         nodeRangeDescription={nodeRangeInfo.description}
-        onSuggest={handlePlacementSuggest}
-        onAcceptNode={handleAcceptPlacementNode}
-      />
-      <PDFReportModal
-        isOpen={showPDFReport}
-        onClose={() => setShowPDFReport(false)}
+        onSuggestPlacement={handlePlacementSuggest}
+        onAcceptPlacementNode={handleAcceptPlacementNode}
+        showPDFReport={showPDFReport}
+        onClosePDFReport={() => setShowPDFReport(false)}
         hasLOSOverlays={losOverlays.length > 0}
         hasCoverageOverlays={coverageOverlays.length > 0 || terrainCoverageOverlays.length > 0}
-        onGenerate={handlePDFReportGenerate}
+        onGeneratePDFReport={handlePDFReportGenerate}
       />
     </div>
   );

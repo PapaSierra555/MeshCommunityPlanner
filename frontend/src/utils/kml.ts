@@ -48,6 +48,15 @@ function linkQualityColor(quality: string): string {
   }
 }
 
+function nodePrivacyMetadata(node: Node): Record<string, string> {
+  return {
+    visibility: node.visibility || 'private',
+    coordinate_precision: node.coordinate_precision || 'exact',
+    node_role: node.node_role || 'planned',
+    node_status: node.node_status || 'planned',
+  };
+}
+
 export function exportKML(nodes: Node[], planName: string, links?: KMLLink[]): string {
   const lines: string[] = [];
 
@@ -55,7 +64,7 @@ export function exportKML(nodes: Node[], planName: string, links?: KMLLink[]): s
   lines.push('<kml xmlns="http://www.opengis.net/kml/2.2">');
   lines.push('<Document>');
   lines.push(`  <name>${escapeXml(planName)}</name>`);
-  lines.push(`  <description>Mesh Community Planner export — ${nodes.length} node(s)</description>`);
+  lines.push(`  <description>${escapeXml(`Mesh Community Planner export — ${nodes.length} node(s). Privacy metadata is labeled per node; coordinates are exported as stored.`)}</description>`);
 
   // Node styles
   lines.push('  <Style id="nodeDefault">');
@@ -78,8 +87,13 @@ export function exportKML(nodes: Node[], planName: string, links?: KMLLink[]): s
   lines.push('    <name>Nodes</name>');
 
   for (const node of nodes) {
+    const privacy = nodePrivacyMetadata(node);
     const desc = [
       `<b>Device:</b> ${escapeXml(node.device_id || 'N/A')}`,
+      `<b>Visibility:</b> ${escapeXml(privacy.visibility)}`,
+      `<b>Coordinate Precision:</b> ${escapeXml(privacy.coordinate_precision)}`,
+      `<b>Node Role:</b> ${escapeXml(privacy.node_role)}`,
+      `<b>Node Status:</b> ${escapeXml(privacy.node_status)}`,
       `<b>Antenna Height:</b> ${node.antenna_height_m} m`,
       `<b>TX Power:</b> ${node.tx_power_dbm} dBm`,
       `<b>Firmware:</b> ${escapeXml(node.firmware || 'N/A')}`,
@@ -95,6 +109,11 @@ export function exportKML(nodes: Node[], planName: string, links?: KMLLink[]): s
     lines.push(`      <name>${escapeXml(node.name)}</name>`);
     lines.push(`      <description><![CDATA[${desc}]]></description>`);
     lines.push(`      <styleUrl>${styleUrl}</styleUrl>`);
+    lines.push('      <ExtendedData>');
+    for (const [key, value] of Object.entries(privacy)) {
+      lines.push(`        <Data name="${key}"><value>${escapeXml(value)}</value></Data>`);
+    }
+    lines.push('      </ExtendedData>');
     lines.push('      <Point>');
     lines.push(`        <altitudeMode>relativeToGround</altitudeMode>`);
     lines.push(`        <coordinates>${node.longitude},${node.latitude},${node.antenna_height_m}</coordinates>`);

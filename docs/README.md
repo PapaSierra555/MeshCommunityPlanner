@@ -125,7 +125,6 @@ cd mesh-community-planner
 # Backend setup
 cd backend
 pip install -r requirements.txt
-pip install -r requirements-dev.txt
 
 # Frontend setup
 cd ../frontend
@@ -158,17 +157,11 @@ Open your browser to `http://localhost:5173` (Vite dev server).
 ```bash
 cd backend
 
-# Run unit tests with coverage
-python -m pytest tests/ --cov=app --cov-branch --cov-report=term --cov-report=html
+# Run backend tests
+python -m pytest tests/
 
-# Run security tests
-python -m pytest tests/security/ -v
-
-# Lint
-ruff check app/
-
-# Audit dependencies
-pip-audit
+# Backend lint/type tooling is not configured in this repo yet.
+# Follow PEP 8 and rely on pytest plus focused review for backend changes.
 ```
 
 **Frontend:**

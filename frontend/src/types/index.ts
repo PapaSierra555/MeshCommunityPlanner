@@ -12,6 +12,14 @@ export type RegionCode = 'us_fcc' | 'eu_868' | 'eu_433' | 'anz';
 export type CodingRate = '4/5' | '4/6' | '4/7' | '4/8';
 export type UnitSystem = 'metric' | 'imperial';
 export type ColorPalette = 'viridis' | 'cividis' | 'deuteranopia' | 'protanopia' | 'tritanopia' | 'high_contrast';
+export type NodeVisibility = 'private' | 'community' | 'public';
+export type CoordinatePrecision = 'exact' | 'approximate' | 'hidden';
+export type NodeRole = 'client' | 'repeater' | 'gateway' | 'sensor' | 'planned' | 'experimental';
+export type NodeLifecycleStatus = 'candidate' | 'planned' | 'active' | 'retired' | 'rejected';
+export type MountType = 'handheld' | 'window' | 'indoor' | 'mast' | 'roof' | 'tower' | 'vehicle' | 'tree' | 'temporary';
+export type PowerSource = 'battery' | 'solar' | 'mains' | 'vehicle' | 'unknown';
+export type RadioProtocol = FirmwareFamily;
+export type FieldTestType = 'message' | 'position' | 'telemetry' | 'voice' | 'other';
 
 // ============================================================================
 // Plan & Node Types
@@ -28,15 +36,91 @@ export interface Plan {
   updated_at: string;
 }
 
+export interface Site {
+  id: string;
+  plan_id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  public_latitude: number | null;
+  public_longitude: number | null;
+  coordinate_precision: CoordinatePrecision;
+  visibility: NodeVisibility;
+  owner_user_id: string | null;
+  access_notes_private: string;
+  status: NodeLifecycleStatus;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Mount {
+  id: string;
+  plan_id: string;
+  site_id: string;
+  mount_type: MountType;
+  height_agl_m: number;
+  height_asl_m: number | null;
+  cable_id: string | null;
+  cable_length_m: number;
+  enclosure: string | null;
+  power_source: PowerSource;
+  install_notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RadioProfile {
+  id: string;
+  plan_id: string;
+  name: string;
+  protocol: RadioProtocol;
+  region: string;
+  frequency_mhz: number;
+  tx_power_dbm: number;
+  spreading_factor: number;
+  bandwidth_khz: number;
+  coding_rate: string;
+  modem_preset: string | null;
+  firmware_version: string | null;
+  config_json: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FieldObservation {
+  id: string;
+  plan_id: string;
+  latitude: number;
+  longitude: number;
+  success: boolean;
+  ack_relay: string | null;
+  ack_db: number | null;
+  test_type: FieldTestType;
+  source_node_id: string | null;
+  target_node_id: string | null;
+  timestamp: string | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Node {
   id: string | number;
   plan_id: string;
+  site_id?: string | null;
+  mount_id?: string | null;
+  radio_profile_id?: string | null;
   name: string;
   latitude: number;
   longitude: number;
   antenna_height_m: number;
   elevation?: number;
   status?: 'online' | 'offline' | 'warning';
+  visibility?: NodeVisibility;
+  coordinate_precision?: CoordinatePrecision;
+  node_role?: NodeRole;
+  node_status?: NodeLifecycleStatus;
   device_id: string;
   firmware: FirmwareFamily;
   region: RegionCode;
@@ -58,6 +142,41 @@ export interface Node {
   sort_order: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface NodePage {
+  items: Node[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface SitePage {
+  items: Site[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface MountPage {
+  items: Mount[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface RadioProfilePage {
+  items: RadioProfile[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface FieldObservationPage {
+  items: FieldObservation[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 // ============================================================================
@@ -143,7 +262,7 @@ export interface Settings {
 // Map State Types
 // ============================================================================
 
-export type MapMode = 'view' | 'add_node' | 'edit_node' | 'measure';
+export type MapMode = 'view' | 'add_node' | 'add_field_observation' | 'edit_node' | 'measure';
 
 export interface MapViewport {
   center: [number, number];

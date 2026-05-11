@@ -8,10 +8,12 @@ import type { Node } from '../types';
 /* ---- CSV Column Definitions ---- */
 
 const CSV_COLUMNS = [
-  'name', 'latitude', 'longitude', 'antenna_height_m', 'device_id', 'firmware',
-  'region', 'frequency_mhz', 'tx_power_dbm', 'spreading_factor', 'bandwidth_khz',
-  'coding_rate', 'modem_preset', 'antenna_id', 'cable_id', 'cable_length_m',
-  'pa_module_id', 'is_solar', 'desired_coverage_radius_m', 'notes', 'environment',
+  'name', 'latitude', 'longitude', 'visibility', 'coordinate_precision',
+  'node_role', 'node_status', 'antenna_height_m', 'device_id', 'firmware',
+  'region', 'frequency_mhz', 'tx_power_dbm', 'spreading_factor',
+  'bandwidth_khz', 'coding_rate', 'modem_preset', 'antenna_id', 'cable_id',
+  'cable_length_m', 'pa_module_id', 'is_solar',
+  'desired_coverage_radius_m', 'notes', 'environment',
 ] as const;
 
 /** Column name aliases for flexible CSV import (lowercase → canonical name) */
@@ -20,6 +22,10 @@ const COLUMN_ALIASES: Record<string, string> = {
   'lon': 'longitude',
   'lng': 'longitude',
   'long': 'longitude',
+  'privacy': 'visibility',
+  'precision': 'coordinate_precision',
+  'role': 'node_role',
+  'status': 'node_status',
   'height': 'antenna_height_m',
   'antenna_height': 'antenna_height_m',
   'device': 'device_id',
@@ -40,6 +46,16 @@ const COLUMN_ALIASES: Record<string, string> = {
   'env': 'environment',
 };
 
+type CSVColumn = typeof CSV_COLUMNS[number];
+
+function setNodeField<K extends keyof Node>(
+  node: Partial<Node>,
+  key: K,
+  value: Node[K]
+): void {
+  node[key] = value;
+}
+
 /* ---- Export ---- */
 
 function escapeCSVField(value: string): string {
@@ -49,11 +65,26 @@ function escapeCSVField(value: string): string {
   return value;
 }
 
+function getExportValue(node: Node, col: CSVColumn): unknown {
+  switch (col) {
+    case 'visibility':
+      return node.visibility || 'private';
+    case 'coordinate_precision':
+      return node.coordinate_precision || 'exact';
+    case 'node_role':
+      return node.node_role || 'planned';
+    case 'node_status':
+      return node.node_status || 'planned';
+    default:
+      return node[col as keyof Node];
+  }
+}
+
 export function exportNodesCSV(nodes: Node[]): string {
   const header = CSV_COLUMNS.join(',');
   const rows = nodes.map((node) => {
     return CSV_COLUMNS.map((col) => {
-      const value = (node as any)[col];
+      const value = getExportValue(node, col);
       if (value == null) return '';
       if (typeof value === 'boolean') return value ? 'true' : 'false';
       if (typeof value === 'number') return String(value);
@@ -194,6 +225,10 @@ export function parseNodesCSV(csvText: string, defaults: Partial<Node>): ParseCS
       name: row.name.trim(),
       latitude: lat,
       longitude: lon,
+      visibility: defaults.visibility || 'private',
+      coordinate_precision: defaults.coordinate_precision || 'exact',
+      node_role: defaults.node_role || 'planned',
+      node_status: defaults.node_status || 'planned',
     };
 
     // Optional numeric fields
@@ -211,7 +246,7 @@ export function parseNodesCSV(csvText: string, defaults: Partial<Node>): ParseCS
       if (row[csvKey] !== undefined && row[csvKey] !== '') {
         const val = parseFloat(row[csvKey]);
         if (!isNaN(val)) {
-          (node as any)[nodeKey] = val;
+          setNodeField(node, nodeKey, val as Node[typeof nodeKey]);
         }
       }
     }
@@ -231,7 +266,7 @@ export function parseNodesCSV(csvText: string, defaults: Partial<Node>): ParseCS
 
     for (const [csvKey, nodeKey] of strFields) {
       if (row[csvKey] !== undefined && row[csvKey] !== '') {
-        (node as any)[nodeKey] = row[csvKey];
+        setNodeField(node, nodeKey, row[csvKey] as Node[typeof nodeKey]);
       }
     }
 
@@ -240,12 +275,45 @@ export function parseNodesCSV(csvText: string, defaults: Partial<Node>): ParseCS
       node.is_solar = row.is_solar.toLowerCase() === 'true' || row.is_solar === '1';
     }
 
+    // Privacy/domain fields (validate against known values)
+    const validVisibility = ['private', 'community', 'public'];
+    if (row.visibility !== undefined && row.visibility !== '') {
+      const visibility = row.visibility.toLowerCase().trim();
+      if (validVisibility.includes(visibility)) {
+        node.visibility = visibility as Node['visibility'];
+      }
+    }
+
+    const validCoordinatePrecision = ['exact', 'approximate', 'hidden'];
+    if (row.coordinate_precision !== undefined && row.coordinate_precision !== '') {
+      const precision = row.coordinate_precision.toLowerCase().trim();
+      if (validCoordinatePrecision.includes(precision)) {
+        node.coordinate_precision = precision as Node['coordinate_precision'];
+      }
+    }
+
+    const validNodeRoles = ['client', 'repeater', 'gateway', 'sensor', 'planned', 'experimental'];
+    if (row.node_role !== undefined && row.node_role !== '') {
+      const role = row.node_role.toLowerCase().trim();
+      if (validNodeRoles.includes(role)) {
+        node.node_role = role as Node['node_role'];
+      }
+    }
+
+    const validNodeStatuses = ['candidate', 'planned', 'active', 'retired', 'rejected'];
+    if (row.node_status !== undefined && row.node_status !== '') {
+      const status = row.node_status.toLowerCase().trim();
+      if (validNodeStatuses.includes(status)) {
+        node.node_status = status as Node['node_status'];
+      }
+    }
+
     // Environment field (validate against known values)
     const validEnvironments = ['los_elevated', 'open_rural', 'suburban', 'urban', 'indoor'];
     if (row.environment !== undefined && row.environment !== '') {
       const env = row.environment.toLowerCase().trim();
       if (validEnvironments.includes(env)) {
-        (node as any).environment = env;
+        node.environment = env;
       }
       // Invalid values silently fall through to default
     }

@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from backend.app.api.models import TerrainCoverageGridRequest
+from backend.app.models.node import NodeCreate, NodeUpdate
 
 
 class TestTerrainCoverageMaxRadius:
@@ -46,3 +47,54 @@ class TestTerrainCoverageMaxRadius:
         """Default value of 15,000 m is preserved."""
         req = TerrainCoverageGridRequest(**self._BASE)
         assert req.max_radius_m == 15000.0
+
+
+class TestNodePrivacyDomainValidation:
+    """Node privacy/domain enum defaults and validation."""
+
+    _BASE_NODE = dict(
+        name="Test Node",
+        latitude=27.5,
+        longitude=-82.0,
+        device_id="tbeam-supreme",
+        firmware="meshtastic",
+        region="us_fcc",
+        frequency_mhz=906.875,
+        tx_power_dbm=22.0,
+        spreading_factor=11,
+        bandwidth_khz=250.0,
+        coding_rate="4/5",
+        antenna_id="915-3dbi-omni",
+    )
+
+    def test_node_create_privacy_domain_defaults(self):
+        """New fields default to backwards-compatible values."""
+        node = NodeCreate(**self._BASE_NODE)
+
+        assert node.visibility == "private"
+        assert node.coordinate_precision == "exact"
+        assert node.node_role == "planned"
+        assert node.node_status == "planned"
+
+    def test_node_create_rejects_invalid_privacy_domain_values(self):
+        """Invalid enum-like values are rejected by the API model."""
+        with pytest.raises(ValidationError):
+            NodeCreate(**self._BASE_NODE, visibility="secret")
+
+        with pytest.raises(ValidationError):
+            NodeCreate(**self._BASE_NODE, coordinate_precision="fuzzy")
+
+        with pytest.raises(ValidationError):
+            NodeCreate(**self._BASE_NODE, node_role="router")
+
+        with pytest.raises(ValidationError):
+            NodeCreate(**self._BASE_NODE, node_status="draft")
+
+    def test_node_update_accepts_partial_privacy_domain_values(self):
+        """Updates can set any subset of privacy/domain fields."""
+        node = NodeUpdate(visibility="public", node_status="active")
+
+        assert node.visibility == "public"
+        assert node.node_status == "active"
+        assert node.coordinate_precision is None
+        assert node.node_role is None

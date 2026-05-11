@@ -5,9 +5,16 @@
 
 import React, { useState, useId } from 'react';
 
+type TooltipTriggerProps = Pick<
+  React.HTMLAttributes<HTMLElement>,
+  'onMouseEnter' | 'onMouseLeave' | 'onFocus' | 'onBlur'
+> & {
+  'aria-describedby'?: string;
+};
+
 export interface TooltipProps {
   content: string;
-  children: React.ReactElement;
+  children: React.ReactElement<TooltipTriggerProps>;
   position?: 'above' | 'below' | 'left' | 'right';
 }
 

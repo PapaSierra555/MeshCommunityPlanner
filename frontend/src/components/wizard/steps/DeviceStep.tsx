@@ -5,11 +5,12 @@
 
 import React from 'react';
 import type { Node } from '../../../types';
+import type { LegacyNodeCreatePayload, NodeWizardDraftField } from '../../../utils/nodeDomainAdapters';
 
 export interface DeviceStepProps {
-  data: Partial<Node>;
+  data: LegacyNodeCreatePayload;
   errors: Record<string, string>;
-  onChange: (field: string, value: any) => void;
+  onChange: (field: NodeWizardDraftField, value: LegacyNodeCreatePayload[NodeWizardDraftField]) => void;
 }
 
 export function DeviceStep({ data, errors, onChange }: DeviceStepProps) {
@@ -31,15 +32,16 @@ export function DeviceStep({ data, errors, onChange }: DeviceStepProps) {
       </div>
 
       <div className="form-group">
-        <label htmlFor="firmware_family">
+        <label htmlFor="firmware">
           Firmware Family
           <select
-            id="firmware_family"
-            value={data.firmware_family || 'meshtastic'}
-            onChange={(e) => onChange('firmware_family', e.target.value)}
+            id="firmware"
+            value={data.firmware || 'meshtastic'}
+            onChange={(e) => onChange('firmware', e.target.value as Node['firmware'])}
           >
             <option value="meshtastic">Meshtastic</option>
-            <option value="custom">Custom</option>
+            <option value="meshcore">MeshCore</option>
+            <option value="reticulum">Reticulum</option>
           </select>
         </label>
       </div>

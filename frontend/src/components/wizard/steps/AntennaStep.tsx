@@ -7,12 +7,12 @@ import React from 'react';
 import { Tooltip } from '../../common/Tooltip';
 import { AccessibleIcon } from '../../common/AccessibleIcon';
 import { NumberInput } from '../../common/NumberInput';
-import type { Node } from '../../../types';
+import type { LegacyNodeCreatePayload, NodeWizardDraftField } from '../../../utils/nodeDomainAdapters';
 
 export interface AntennaStepProps {
-  data: Partial<Node>;
+  data: LegacyNodeCreatePayload;
   errors: Record<string, string>;
-  onChange: (field: string, value: any) => void;
+  onChange: (field: NodeWizardDraftField, value: LegacyNodeCreatePayload[NodeWizardDraftField]) => void;
 }
 
 export function AntennaStep({ data, errors, onChange }: AntennaStepProps) {
@@ -22,19 +22,19 @@ export function AntennaStep({ data, errors, onChange }: AntennaStepProps) {
       <p>Configure antenna gain, height, and cable loss.</p>
 
       <div className="form-group">
-        <label htmlFor="antenna_gain_dbi">
-          Antenna Gain (dBi){' '}
+        <label htmlFor="antenna_id">
+          Antenna ID{' '}
           <Tooltip
-            content="Antenna gain in decibels relative to isotropic radiator (dBi). Higher gain focuses the signal in a specific direction, increasing effective range. Typical values: 0-6 dBi. Omnidirectional antennas: 0-3 dBi, directional antennas: 3-15+ dBi."
+            content="Catalog antenna identifier used by backend propagation calculations. Choose an antenna that matches the installed hardware."
             position="right"
           >
-            <AccessibleIcon icon="ℹ️" label="Antenna Gain information" />
+            <AccessibleIcon name="info" label="Antenna ID information" />
           </Tooltip>
-          <NumberInput
-            id="antenna_gain_dbi"
-            value={data.antenna_gain_dbi || 2}
-            onChange={(v) => onChange('antenna_gain_dbi', v)}
-            step={0.1}
+          <input
+            type="text"
+            id="antenna_id"
+            value={data.antenna_id || '915-3dbi-omni'}
+            onChange={(e) => onChange('antenna_id', e.target.value)}
           />
         </label>
       </div>
@@ -46,7 +46,7 @@ export function AntennaStep({ data, errors, onChange }: AntennaStepProps) {
             content="Height of the antenna above ground level in meters. Higher placement improves line-of-sight and reduces obstacles. Typical values: 2-10 meters for ground-level deployments, higher for towers. Increasing height significantly improves range."
             position="right"
           >
-            <AccessibleIcon icon="ℹ️" label="Antenna Height information" />
+            <AccessibleIcon name="info" label="Antenna Height information" />
           </Tooltip>
           <NumberInput
             id="antenna_height_m"
@@ -58,18 +58,18 @@ export function AntennaStep({ data, errors, onChange }: AntennaStepProps) {
       </div>
 
       <div className="form-group">
-        <label htmlFor="cable_loss_db">
-          Cable Loss (dB){' '}
+        <label htmlFor="cable_length_m">
+          Cable Length (m){' '}
           <Tooltip
-            content="Signal loss in the coaxial cable between radio and antenna, measured in decibels. Longer and thinner cables have higher loss. Typical values: 0-3 dB for short runs (< 3m). Use quality low-loss cable (LMR-400, RG-58) and keep cables as short as possible."
+            content="Length of the coaxial cable between radio and antenna. Longer cables increase signal loss depending on cable type."
             position="right"
           >
-            <AccessibleIcon icon="ℹ️" label="Cable Loss information" />
+            <AccessibleIcon name="info" label="Cable Length information" />
           </Tooltip>
           <NumberInput
-            id="cable_loss_db"
-            value={data.cable_loss_db || 0}
-            onChange={(v) => onChange('cable_loss_db', v)}
+            id="cable_length_m"
+            value={data.cable_length_m || 0}
+            onChange={(v) => onChange('cable_length_m', v)}
             step={0.1}
           />
         </label>
@@ -81,7 +81,7 @@ export function AntennaStep({ data, errors, onChange }: AntennaStepProps) {
             content="Propagation environment for this node's coverage analysis. Determines path loss exponent and fade margin. A hilltop repeater might use 'Clear LOS' while a client in a neighborhood uses 'Suburban'."
             position="right"
           >
-            <AccessibleIcon icon="ℹ️" label="Environment information" />
+            <AccessibleIcon name="info" label="Environment information" />
           </Tooltip>
           <select
             id="environment"

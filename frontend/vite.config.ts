@@ -8,6 +8,8 @@ export default defineConfig({
     __BUILD_ID__: JSON.stringify(Date.now().toString()),
   },
   server: {
+    host: '0.0.0.0',
+    allowedHosts: true,
     proxy: {
       '/api': 'http://127.0.0.1:8321',
       '/ws': {
